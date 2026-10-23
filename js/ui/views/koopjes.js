@@ -6,7 +6,7 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded } from '../../core/watch.js';
 import { parseSize, detectBrand } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
@@ -545,9 +545,18 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
   const cleanTitle = o.title.replace(/^alle\s+/i, '').replace(/\*+$/, '');
   const seen = new Set();
   const rows = [];
+  // 1. Producten die onder de actie zelf vallen (woorden van de titel, met merk)
+  const { productsForOffer } = await import('../../core/assortment.js');
+  for (const r of productsForOffer(A.idx, o)) {
+    if (unit.base && r.sizeUnit && r.sizeUnit !== unit.base && unit.base !== 'st') continue;
+    if (isExcluded(item, r.name)) continue;
+    seen.add(r.name + r.price);
+    rows.push(r);
+  }
+  // 2. Niets gevonden? Dan breder zoeken op het volgproduct
   // "AH Gehakt 300 gram en AH Terra plantaardig rulgehakt 200 gram" → beide delen apart, plus de zoekwoorden van het volgproduct
   const parts = cleanTitle.split(/\s+(?:en|of)\s+|,\s*/i).map((t) => t.trim()).filter((t) => t.length > 2);
-  for (const q of [...new Set([cleanTitle, ...parts, item.name, ...(item.terms || [])])]) {
+  if (!rows.length) for (const q of [...new Set([cleanTitle, ...parts, item.name, ...(item.terms || [])])]) {
     for (const grp of suggestEquivalents(A.idx, q, { stores: [o.store], perStore: 8 })) {
       for (const r of grp.results) {
         if (seen.has(r.name + r.price)) continue;
@@ -562,7 +571,7 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
   // Producten met een inhoud die in de actie staat ("300 gram") eerst
   const inOffer = (r) => sizeOptionsOf(o).some((sz) => sz.unit === r.sizeUnit && Math.abs(sz.amount - r.sizeAmount) <= 1);
   rows.sort((a, b) => inOffer(b) - inOffer(a));
-  list.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="between small" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px">
+  list.innerHTML = rows.slice(0, 15).map((r, i) => `<div class="between small" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px">
     <div style="min-width:0"><div>${esc(r.name)}</div><div class="tiny muted">${esc(r.sizeText || '')}${r.sizeText ? ' · ' : ''}normaal ${esc(euro(r.price))} (Checkjebon)</div></div>
     <button class="btn small" data-pick="${i}">Deze</button></div>`).join('');
   list.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {

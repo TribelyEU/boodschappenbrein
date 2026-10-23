@@ -68,3 +68,56 @@ export function searchAssortment(idx, text, { stores = ASSORTMENT_STORES, perSto
   const query = size ? size.rest : text;
   return suggestEquivalents(idx, query, { size, stores, perStore });
 }
+
+const STOP = new Set(['alle', 'en', 'of', 'voor', 'de', 'het', 'van', 'met', 'in', 'per', 'stuk', 'stuks', 'gram', 'g', 'kg', 'kilo', 'ml', 'cl', 'l', 'liter', 'pak', 'pakken', 'verpakking', 'verpakkingen', 'm', 'u', 'v', 'mu', 'v']);
+
+/**
+ * Welke producten van deze winkel vallen onder deze actie? Op de woorden van de actietitel zelf, mét merk
+ * ("Alle Perla Huisblends … capsules voor Nespresso" → Perla Huisblends-capsules, niet Starbucks).
+ * Het merk moet erin staan als de actie een merk noemt.
+ */
+export function productsForOffer(idx, offer, { limit = 40 } = {}) {
+  const title = String(offer.title || '').replace(/^alle\s+/i, '').replace(/\*+$/, '');
+  // "A en B" / "A of B" / "A, B": elk deel apart; "capsules voor Nespresso" → "capsules" (voor … is een toevoeging)
+  const parts = title.split(/\s+(?:en|of)\s+|,\s*/i).map((p) => p.replace(/\bvoor\s+\S+/gi, ' ').trim()).filter(Boolean);
+  const wordsOf = (t) => normalizeText(t.replace(/-/g, ' ')).split(' ').filter((w) => w.length >= 2 && !STOP.has(w) && !/^\d/.test(w));
+  const storeItems = idx.items.filter((it) => it.store === offer.store);
+  for (const it of storeItems) if (!it._words) it._words = normalizeText(it.name.replace(/-/g, ' ')).split(' ');
+  // Merk: bekend merk, of het eerste woord als dat bij minstens 3 producten van deze winkel vooraan staat (Perla, Calvé, …)
+  const firstWordCount = (w) => storeItems.reduce((n, it) => n + (it._words[0] === w ? 1 : 0), 0);
+  const brandOf = (part) => {
+    const b = detectBrand(part);
+    if (b.brand) return normalizeText(b.brand).split(' ');
+    const w = wordsOf(part)[0];
+    return w && w.length >= 3 && firstWordCount(w) >= 3 ? [w] : [];
+  };
+  const prefix = (t, w) => t === w || (w.length >= 4 && (t.startsWith(w) || (w.startsWith(t) && t.length >= 4)));
+  const has = (toks, w) => toks.some((t) => prefix(t, w));
+  // Het hoofdwoord moet als heel woord of als einde van een samenstelling voorkomen: "gehakt" in "rundergehakt", niet in "gehaktbal"
+  const hasHead = (toks, w) => toks.some((t) => t === w || t === `${w}s` || t === `${w}en` || (w.length >= 5 && t.endsWith(w)));
+  let inherited = [];
+  const rules = [];
+  for (const part of parts) {
+    const words = wordsOf(part);
+    if (!words.length) continue;
+    const own = brandOf(part);
+    const brandWords = own.length ? own : inherited;
+    if (own.length) inherited = own;
+    const rest = words.filter((w) => !brandWords.includes(w));
+    const head = rest.length ? rest[rest.length - 1] : null;
+    rules.push({ rest, brandWords, head, need: rest.length >= 3 ? rest.length - 1 : rest.length });
+  }
+  const out = [];
+  for (const it of storeItems) {
+    const toks = it._words;
+    let best = 0;
+    for (const r of rules) {
+      if (r.brandWords.length && !r.brandWords.every((w, i) => toks[i] && prefix(toks[i], w))) continue; // merk vooraan
+      if (r.head && !hasHead(toks, r.head)) continue;
+      const hits = r.rest.filter((w) => has(toks, w) || hasHead(toks, w)).length;
+      if (hits >= r.need) best = Math.max(best, hits + r.brandWords.length);
+    }
+    if (best) out.push({ name: it.name, price: it.price, sizeText: it.sizeText, sizeAmount: it.sizeAmount, sizeUnit: it.sizeUnit, hits: best });
+  }
+  return out.sort((a, b) => b.hits - a.hits || a.price - b.price).slice(0, limit);
+}

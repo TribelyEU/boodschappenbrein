@@ -55,6 +55,12 @@ function hasPhrase(text, phrase) {
   return false;
 }
 
+/** Valt deze naam onder een uitzondering van het volgproduct ("vochtig", "gehaktbal")? */
+export function isExcluded(item, name) {
+  const text = norm(name);
+  return (item.exclude || []).some((t) => hasPhrase(text, t) || (!/\s/.test(String(t).trim()) && String(t).trim().length >= 5 && text.includes(normalizeText(t))));
+}
+
 export function matchesWatch(item, offer) {
   const text = norm(`${offer.brand || ''} ${offer.title} ${offer.size || ''}`);
   if (!(item.terms || []).some((t) => hasPhrase(text, t))) return false;

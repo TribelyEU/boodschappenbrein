@@ -210,3 +210,21 @@ test('zelf gekozen variant: inhoud en normale prijs bij "A of B" en "2e gratis"'
   assert.equal(r.offers[0].perUnit, 700, '€ 2,10 voor 300 g = € 7,00 per kilo');
   assert.equal(applyChoice(o, null), o);
 });
+
+test('producten bij een actie: merk en hoofdwoord uit de actietitel (Perla, niet Starbucks)', async () => {
+  const { indexAssortment, productsForOffer } = await import('../js/core/assortment.js');
+  const idx = indexAssortment({ ah: [
+    ['Perla Huisblends Aroma snelfiltermaling', 799, '500 g'], ['Perla Huisblends Lungo classic capsules', 499, '20 stuks'],
+    ['Perla Biologisch Espresso dark capsules', 349, '10 stuks'], ['Perla Superiore Origins Colombia capsules', 399, '10 stuks'],
+    ['Starbucks Nespresso Colombia capsules', 469, '10 stuks'], ['AH Paracetamol 500mg zachte capsules', 229, '20 stuks'],
+    ['AH Gemengd gehakt', 359, '300 g'], ['AH Rundergehakt', 499, '300 g'], ['AH Gehaktbal naturel', 269, '105 g'], ['AH Terra Plantaardig rulgehakt', 159, '200 g'], ['AH Terra Plantaardige sojadrink', 69, '1 l'],
+  ] });
+  const names = (title) => productsForOffer(idx, { store: 'ah', title }).map((r) => r.name);
+  const perla = names('Alle Perla Huisblends snelfiltermaling 500 gram en capsules voor Nespresso 10 stuks');
+  assert.ok(perla.includes('Perla Huisblends Lungo classic capsules'));
+  assert.ok(perla.includes('Perla Huisblends Aroma snelfiltermaling'));
+  assert.ok(!perla.some((n) => /Starbucks|Paracetamol/.test(n)), perla.join(', '));
+  const gehakt = names('Alle AH Gehakt 300 gram en AH Terra plantaardig rulgehakt 200 gram*');
+  assert.ok(gehakt.includes('AH Rundergehakt') && gehakt.includes('AH Gemengd gehakt') && gehakt.includes('AH Terra Plantaardig rulgehakt'));
+  assert.ok(!gehakt.includes('AH Gehaktbal naturel') && !gehakt.includes('AH Terra Plantaardige sojadrink'), gehakt.join(', '));
+});
