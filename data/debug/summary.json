@@ -1,0 +1,74 @@
+{
+ "jumbo-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://www.jumbo.com/robots.txt",
+  "bytes": 333,
+  "type": "text/plain"
+ },
+ "jumbo-page.html": {
+  "status": 200,
+  "finalUrl": "https://www.jumbo.com/aanbiedingen/nu",
+  "bytes": 860726,
+  "type": "text/html;charset=utf-8"
+ },
+ "dirk-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://www.dirk.nl/robots.txt",
+  "bytes": 67,
+  "type": "text/plain; charset=utf-8"
+ },
+ "dirk-page.html": {
+  "status": 200,
+  "finalUrl": "https://www.dirk.nl/aanbiedingen",
+  "bytes": 1071656,
+  "type": "text/html;charset=utf-8"
+ },
+ "hoogvliet-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://hoogvliet.nl/robots.txt",
+  "bytes": 1572,
+  "type": "text/plain; charset=utf-8"
+ },
+ "hoogvliet-page.html": {
+  "status": 200,
+  "finalUrl": "https://hoogvliet.nl/aanbiedingen",
+  "bytes": 760070,
+  "type": "text/html; charset=utf-8"
+ },
+ "action-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://www.action.com/robots.txt",
+  "bytes": 1535,
+  "type": "text/plain"
+ },
+ "action-page.html": {
+  "status": 200,
+  "finalUrl": "https://www.action.com/nl-nl/weekactie/",
+  "bytes": 665828,
+  "type": "text/html; charset=utf-8"
+ },
+ "lidl-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://www.lidl.nl/robots.txt",
+  "bytes": 312,
+  "type": "text/plain"
+ },
+ "lidl-page.html": {
+  "status": 200,
+  "finalUrl": "https://www.lidl.nl/c/aanbiedingen/a10008785",
+  "bytes": 928986,
+  "type": "text/html;charset=utf-8"
+ },
+ "kruidvat-robots.txt": {
+  "status": 200,
+  "finalUrl": "https://www.kruidvat.nl/robots.txt",
+  "bytes": 1008,
+  "type": "text/plain;charset=ISO-8859-1"
+ },
+ "kruidvat-page.html": {
+  "status": 403,
+  "finalUrl": "https://www.kruidvat.nl/acties",
+  "bytes": 375,
+  "type": "text/html"
+ }
+}

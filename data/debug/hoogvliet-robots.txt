@@ -1,0 +1,90 @@
+User-agent: Googlebot-Image
+Disallow: /INTERSHOP/
+Disallow: /intershop*
+Disallow: /*/intershop*
+Disallow: /*/INTERSHOP*
+Disallow: /search
+Disallow: /*/q/*_ASC*
+Disallow: /*/q/*_DESC*
+
+User-agent: Googlebot
+Disallow: /INTERSHOP/
+Disallow: /intershop*
+Disallow: /*/intershop*
+Disallow: /*/INTERSHOP*
+Disallow: /search
+Disallow: /*/q/*_ASC*
+Disallow: /*/q/*_DESC*
+
+User-agent: bingbot
+Disallow: /INTERSHOP/
+Disallow: /intershop*
+Disallow: /*/intershop*
+Disallow: /*/INTERSHOP*
+Disallow: /search
+Disallow: /*/q/*_ASC*
+Disallow: /*/q/*_DESC*
+
+User-agent: *
+Disallow: /INTERSHOP/
+Disallow: /intershop*
+Disallow: /*/intershop*
+Disallow: /*/INTERSHOP*
+Disallow: /search
+Disallow: /*/q/*_ASC*
+Disallow: /*/q/*_DESC*
+
+Sitemap: https://hoogvliet.nl/sitemap.xml
+
+# ----------------------------------------------------
+# Block bad crawlers
+# ----------------------------------------------------
+# third party search engine bot
+User-agent: MJ12bot
+Disallow: /
+
+# Web-crawler by the company 'WiseGuys' to gather unstructured webdata
+User-agent: Vagabondo
+Disallow: /
+
+# Chinese Search Engine
+User-agent: BaiDuSpider
+Disallow: /
+
+# French Search Engine
+User-agent: Exabot
+Disallow: /
+
+# Russian Search Engine
+User-agent: Yandex
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: CFNetwork
+Disallow: /
+
+User-agent: TwengaBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: FatBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: seoscanners.net
+Disallow: /
+
+User-agent: SpeedySpider
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
