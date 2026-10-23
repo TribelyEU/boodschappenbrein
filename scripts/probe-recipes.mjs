@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
 const B = 'https://www.lekkerensimpel.com';
 const out = {};
+await mkdir(join(root, 'data', 'debug'), { recursive: true });
 async function get(path) {
   try {
     const r = await fetch(B + path, { headers: { 'User-Agent': UA, Accept: '*/*' }, redirect: 'follow' });
@@ -22,7 +23,10 @@ for (const p of ['/robots.txt', '/sitemap_index.xml', '/wp-json/', '/wp-json/wp/
   await new Promise((res) => setTimeout(res, 800));
 }
 try {
-  const sm = await get('/post-sitemap.xml');
+  const idx = await get('/sitemap_index.xml');
+  const maps = [...idx.text.matchAll(/<loc>([^<]+post-sitemap\d*\.xml)<\/loc>/g)].map((m) => m[1]);
+  out.maps = maps;
+  const sm = await get(maps.at(-1).replace(B, ''));
   const urls = [...sm.text.matchAll(/<url>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>)?/g)].map((m) => ({ loc: m[1], mod: m[2] }));
   out.sitemap = { count: urls.length, first: urls.slice(0, 5), last: urls.slice(-5) };
   const recent = [...urls].sort((x, y) => String(y.mod).localeCompare(String(x.mod))).slice(0, 2);
@@ -30,6 +34,7 @@ try {
   for (const u of recent) {
     const r = await get(u.loc.replace(B, ''));
     const lds = [...r.text.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    await writeFile(join(root, 'data', 'debug', `recept-${out.pages.length}.html`), r.text).catch(() => {});
     out.pages.push({ link: u.loc, status: r.status, size: r.text.length, ldCount: lds.length, ld: lds.map((s) => s.slice(0, 9000)), wprm: /wprm-recipe/.test(r.text), tasty: /tasty-recipes/.test(r.text) });
     await new Promise((res) => setTimeout(res, 1500));
   }
