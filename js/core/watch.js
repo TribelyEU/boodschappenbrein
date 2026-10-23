@@ -268,7 +268,9 @@ export function dealForListItem(name, { offers = [], watchlist = [], ratings = [
 
 // ---------- equivalenten: wat jullie nu kopen en wat daarmee gelijkwaardig is ----------
 
-const nameWords = (name) => normalizeText(String(name || '').replace(/-/g, ' ')).split(' ').filter((w) => w.length >= 2 && !/^\d/.test(w));
+// Woorden die niet hoeven terug te komen in de aanbiedingstitel ("Jumbo Cola Zero Sugar 1,5 L" ↔ "Jumbo cola zero").
+const ENTRY_GENERIC = new Set(['sugar', 'fles', 'pet', 'blik', 'pak', 'pot', 'naturel', 'classic', 'original', 'regular', 'stuk', 'stuks', 'rollen', 'rol', 'laags', 'liter', 'gram', 'ml', 'cl', 'kg', 'voordeelverpakking', 'pack', 'krat']);
+const nameWords = (name) => normalizeText(String(name || '').replace(/-/g, ' ')).split(' ').filter((w) => w.length >= 2 && !/^\d/.test(w) && !ENTRY_GENERIC.has(w) && !/^\d+(x|ml|cl|l|g|kg)?$/.test(w));
 
 /** Hoort deze aanbieding bij een equivalent (zelfde winkel als die is ingevuld, en alle woorden van de naam erin)? */
 export function matchesEntry(entry, offer) {
@@ -322,4 +324,15 @@ export function ownCandidates(item, facts, products) {
     by.set(f.productId, c);
   }
   return [...by.values()].map((c) => ({ ...c, store: [...c.stores.entries()].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.count - a.count);
+}
+
+/** Prijs van een equivalent uit het assortiment (winkelprijs + inhoud), in de eenheid van het volgproduct. */
+export function entryPriceIn(item, entry) {
+  if (entry?.price == null) return null;
+  const unit = unitOf(item);
+  if (unit.base == null) return { perUnit: entry.price, per: unit.label };
+  const sz = entry.size;
+  if (sz?.amount && sz.unit === unit.base) return { perUnit: Math.round(entry.price / (sz.amount / unit.per)), per: unit.label };
+  if (unit.base === 'st' && sz?.count > 1) return { perUnit: Math.round(entry.price / sz.count), per: unit.label };
+  return { perPack: entry.price, per: 'verpakking' };
 }

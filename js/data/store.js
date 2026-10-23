@@ -81,6 +81,28 @@ async function openMode(mode) {
   if (hAge > 20 * 3600e3) refreshHistory().catch(() => {});
 }
 
+/**
+ * Supermarktassortiment met gewone prijzen (Checkjebon open data), voor voorstellen van gelijkwaardige producten.
+ * Wordt alleen geladen als erom gevraagd wordt, en een week bewaard op het apparaat.
+ */
+export async function loadAssortment({ force = false } = {}) {
+  const { compactAssortment, ASSORTMENT_URL } = await import('../core/assortment.js');
+  let rec = null;
+  try { rec = await db.get('market', 'assortment'); } catch { rec = null; }
+  if (rec?.stores && !force && Date.now() - Date.parse(rec.fetchedAt) < 7 * 864e5) return rec;
+  try {
+    const r = await fetch(ASSORTMENT_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`server antwoordde ${r.status}`);
+    const stores = compactAssortment(await r.json());
+    rec = { id: 'assortment', stores, fetchedAt: new Date().toISOString() };
+    await db.put('market', rec);
+    return rec;
+  } catch (e) {
+    if (rec?.stores) return { ...rec, stale: true, error: e.message };
+    throw new Error(`Assortiment ophalen lukte niet: ${e.message}`);
+  }
+}
+
 /** Bewaarde aanbiedingen van eerdere weken (data/historie.json naast de app). Mislukt dit, dan werkt alles gewoon zonder. */
 export async function refreshHistory() {
   const base = state.settings.offersUrl ? state.settings.offersUrl.replace(/aanbiedingen\.json(\?.*)?$/, '') : new URL('data/', location.href).href;

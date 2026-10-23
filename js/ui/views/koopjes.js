@@ -6,7 +6,8 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn } from '../../core/watch.js';
+import { parseSize, detectBrand } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
 const hcache = { v: -1, map: new Map() };
@@ -25,7 +26,7 @@ function history(item) {
   if (hcache.v !== state.version) { hcache.v = state.version; hcache.map = new Map(); }
   if (!hcache.map.has(item.id)) {
     const d = derived();
-    const priceOf = (e) => (e?.productId ? normalPriceIn(item, priceStats(d.facts, e.productId)) : null);
+    const priceOf = (e) => (e?.productId ? normalPriceIn(item, priceStats(d.facts, e.productId)) || entryPriceIn(item, e) : entryPriceIn(item, e));
     hcache.map.set(item.id, {
       hist: state.history?.data ? watchHistory(item, state.history.data, { today: d.today, exceptWeek: weekKey(d.today) }) : null,
       own: ownLastPurchase(item, d.facts, state.products),
@@ -99,7 +100,8 @@ function vsRef(x, item) {
 function equivBlock(item) {
   const { refs, equiv } = history(item);
   if (!refs.length && !equiv.length) return html`<button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="margin:2px 0 4px">${icon('plus', 14)}Kies wat jullie nu kopen</button>`;
-  const price = (e) => (e.price?.perUnit != null ? `${euro(e.price.perUnit)} per ${unitLabel(item)}` : e.price?.perPack != null ? `${euro(e.price.perPack)} per verpakking` : e.productId ? 'prijs onbekend' : 'nog niet gekocht');
+  const src = (e) => (e.productId ? '' : e.source === 'assortiment' ? ' (winkelprijs)' : '');
+  const price = (e) => (e.price?.perUnit != null ? `${euro(e.price.perUnit)} per ${unitLabel(item)}${src(e)}` : e.price?.perPack != null ? `${euro(e.price.perPack)} per verpakking${src(e)}` : e.productId ? 'prijs onbekend' : 'prijs onbekend');
   return html`<div class="small" style="background:var(--surface-2);border-radius:10px;padding:8px 10px;margin:4px 0 6px">
     ${refs.length ? html`<div><strong>Jullie kopen:</strong></div>${refs.map((r) => html`<div>${r.name}${r.store ? ` (${storeName(r.store)})` : ''} · ${price(r)}</div>`)}` : ''}
     ${equiv.map((e) => html`<div class="muted">Gelijkwaardig: ${e.name}${e.store ? ` (${storeName(e.store)})` : ''} · ${price(e)}</div>`)}
@@ -337,6 +339,8 @@ function equivEditor(w) {
       <select class="input" data-eqstore style="width:auto">${STORE_IDS.map((id) => `<option value="${id}">${esc(storeName(id))}</option>`).join('')}</select>
       <button type="button" class="btn" data-eqadd aria-label="Toevoegen">${icon('plus', 16)}</button>
     </div>
+    <button type="button" class="btn block" data-suggest style="margin-top:10px">${icon('search', 16)}Voorstellen uit het supermarktassortiment</button>
+    <div data-suggestions></div>
     <label class="gap8 small" style="margin-top:10px"><input type="checkbox" name="onlyEquiv" ${w.onlyEquiv ? 'checked' : ''}> Alleen aanbiedingen van wat jullie kopen en gelijkwaardige producten tonen</label>
   </div>`;
 }
@@ -370,9 +374,90 @@ function wireEquiv(box, w, redraw) {
     if (!name) { toast('Typ eerst een naam'); return; }
     save({ equiv: [...(w.equiv || []), { name, store: box.querySelector('[data-eqstore]').value }] });
   });
+  box.querySelector('[data-suggest]')?.addEventListener('click', () => showSuggestions(box, w, save));
   box.querySelectorAll('[data-eqdel]').forEach((b) => b.addEventListener('click', () => {
     const eq = [...(w.equiv || [])];
     eq.splice(+b.dataset.eqdel, 1);
     save({ equiv: eq });
   }));
+}
+
+// ---------- voorstellen uit het assortiment ----------
+let assortmentIdx = null;
+let sugState = null; // { id, groups, title } zodat de lijst open blijft na een keuze
+
+async function getAssortment() {
+  if (assortmentIdx) return assortmentIdx;
+  const { loadAssortment } = await import('../../data/store.js');
+  const { indexAssortment } = await import('../../core/assortment.js');
+  const rec = await loadAssortment();
+  assortmentIdx = { idx: indexAssortment(rec.stores), fetchedAt: rec.fetchedAt, stale: rec.stale };
+  return assortmentIdx;
+}
+
+function refSize(w) {
+  const d = derived();
+  for (const r of refsOf(w)) {
+    if (r.size?.amount) return r.size;
+    if (r.productId) { const st = priceStats(d.facts, r.productId); if (st.packSize) return st.packSize; }
+    const p = parseSize(r.name);
+    if (p) return { amount: p.amount, unit: p.unit };
+  }
+  return null;
+}
+
+async function showSuggestions(box, w, save) {
+  const area = box.querySelector('[data-suggestions]');
+  area.innerHTML = '<p class="small muted" style="margin:8px 0"><span class="spinner"></span> Assortiment laden (eenmalig per week, ±2 MB)…</p>';
+  let A;
+  try { A = await getAssortment(); } catch (e) { area.innerHTML = `<div class="notice bad small" style="margin-top:8px">${esc(e.message)}</div>`; return; }
+  const { suggestEquivalents, searchAssortment, ASSORTMENT_STORES } = await import('../../core/assortment.js');
+  const refs = refsOf(w);
+  const query = !/[\/]/.test(w.name) ? w.name : (refs[0]?.name || w.terms[0]);
+  const size = refSize(w);
+  const preferHouse = !refs.length || refs.some((r) => detectBrand(r.name).house || /^(ah|jumbo|lidl|dirk|hoogvliet|plus)$/.test(r.store || '') && /^(ah|jumbo|1 de beste|g.?woon|plus|hoogvliet)\b/i.test(r.name));
+  const stores = ASSORTMENT_STORES.filter((s) => (state.settings.myStores || []).some((m) => m.id === s));
+  const has = (r, store) => [...(w.equiv || []), ...refs].some((e) => e.store === store && e.name === r.name && (e.price == null || e.price === r.price));
+  const sizeTxt = (r) => r.sizeText || '';
+  const unitTxt = (r) => { const p = entryPriceIn(w, { price: r.price, size: r.sizeAmount ? { amount: r.sizeAmount, unit: r.sizeUnit, count: parseSize(r.sizeText || r.name)?.count } : null }); return p?.perUnit != null ? ` · ${euro(p.perUnit)} per ${unitLabel(w)}` : ''; };
+  const render = (groups, title) => `
+    <div class="small muted" style="margin:10px 0 4px">${title}</div>
+    ${groups.length ? groups.map((g) => `<div style="margin-top:6px"><strong class="small">${esc(storeName(g.store))}</strong>
+      ${g.results.map((r, i) => `<div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">
+        <div>${esc(r.name)}</div><div class="tiny muted">${esc(sizeTxt(r))}${sizeTxt(r) ? ' · ' : ''}${esc(euro(r.price))}${unitTxt(r)}${r.sameSize ? ' · zelfde inhoud' : ''}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">${has(r, g.store) ? '<span class="chip good">Toegevoegd</span>'
+          : `${refs.length < MAX_REFS ? `<button type="button" class="btn small ghost" data-pick="ref" data-s="${esc(g.store)}" data-i="${i}">Kopen wij</button>` : ''}<button type="button" class="btn small" data-pick="equiv" data-s="${esc(g.store)}" data-i="${i}">${icon('plus', 14)}Gelijkwaardig</button>`}</div>
+      </div>`).join('')}</div>`).join('') : '<p class="small muted">Niets gevonden.</p>'}`;
+  const resume = sugState?.id === w.id;
+  let groups = resume ? sugState.groups : suggestEquivalents(A.idx, query, { size, preferHouse, stores });
+  const draw = (title) => {
+    sugState = { id: w.id, groups, title };
+    area.innerHTML = `
+      <div data-asearch class="gap8" style="margin-top:10px"><input class="input" data-q placeholder="Zelf zoeken, bv. cola zero 1,5 liter" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-go aria-label="Zoeken">${icon('search', 16)}</button></div>
+      ${render(groups, title)}
+      <p class="tiny muted" style="margin-top:8px">Gewone winkelprijzen uit de open data van Checkjebon.nl (bijgewerkt ${esc(formatDate(localDateOf(A.fetchedAt), 'short'))}${A.stale ? ', kon nu niet vernieuwen' : ''}). Geen aanbiedingen. Controleer of het echt hetzelfde product is.</p>`;
+    // (geen <form>: dit staat al binnen het formulier van het volgproduct)
+    const run = () => {
+      const q = area.querySelector('[data-q]').value.trim();
+      if (!q) return;
+      groups = searchAssortment(A.idx, q, { stores });
+      draw(`Zoekresultaten voor “${esc(q)}”`);
+    };
+    area.querySelector('[data-go]').onclick = run;
+    area.querySelector('[data-q]').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } };
+    area.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
+      const g = groups.find((x) => x.store === b.dataset.s);
+      const r = g?.results[+b.dataset.i];
+      if (!r) return;
+      const entry = { name: r.name, store: g.store, price: r.price, size: r.sizeAmount ? { amount: r.sizeAmount, unit: r.sizeUnit, count: parseSize(r.sizeText || r.name)?.count || 1 } : null, source: 'assortiment', priceDate: A.fetchedAt.slice(0, 10) };
+      if (b.dataset.pick === 'ref') await save({ refs: [...refsOf(w), entry].slice(0, MAX_REFS), ref: null });
+      else await save({ equiv: [...(w.equiv || []), entry] });
+      toast(b.dataset.pick === 'ref' ? 'Toegevoegd bij "Wat jullie nu kopen"' : 'Toegevoegd als gelijkwaardig');
+      // Het scherm is opnieuw opgebouwd: voorstellen weer tonen op dezelfde plek
+      const again = document.querySelector('.sheet [data-suggest]');
+      if (again) { again.click(); setTimeout(() => document.querySelector('.sheet [data-suggestions]')?.scrollIntoView({ block: 'start' }), 60); }
+    }));
+  };
+  if (resume) { draw(sugState.title); return; }
+  draw(`Voorstellen voor “${esc(query)}”${size ? ` (${size.unit === 'g' ? `${size.amount} g` : size.unit === 'ml' ? `${size.amount / 1000} l`.replace('.', ',') : `${size.amount} st.`})` : ''}`);
 }

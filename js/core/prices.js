@@ -65,7 +65,9 @@ export function buildIndex(items) {
 }
 
 // Kwalificaties die een ander product maken als ze niet in de vraag staan.
-const QUALIFIERS = ['vochtig', 'choco', 'mini', 'snack', 'drink', 'shak', 'smoothie', 'reep', 'koek', 'chips', 'gedroog', 'gezouten', 'biologisch', 'lactosevrij', 'lactofree', 'houdbar', 'light', 'zero', 'glutenvrij', 'vegan', 'kids', 'mini', 'baby', 'protein', 'proteine'];
+const QUALIFIERS = ['vochtig', 'choco', 'mini', 'snack', 'drink', 'shak', 'smoothie', 'reep', 'koek', 'chips', 'gedroog', 'gezouten', 'biologisch', 'lactosevrij', 'lactofree', 'houdbar', 'light', 'zero', 'glutenvrij', 'vegan', 'kids', 'mini', 'baby', 'protein', 'proteine',
+  // smaakvarianten: "cola zero" is geen "cola zero cherry"
+  'cherry', 'vanill', 'cafeine', 'caffein', 'lemon', 'lime', 'citroen', 'mango', 'perzik', 'framboz', 'aardbei', 'kers', 'honing', 'paprika'];
 
 // Een woord uit de zoekvraag past als het exact voorkomt, of als woordbegin van een langer woord
 // ("melk" in "melkchocolade" niet, want dat is een ander product — daarom alleen voor afkortingen ≥ 5 tekens).
@@ -80,7 +82,10 @@ function tokenMatch(q, t) {
  * Alle woorden uit de zoekterm moeten voorkomen. Extra woorden en ontbrekende kwalificaties verlagen de score.
  * @returns {{item, score, unitPrice}[]} gesorteerd: beste match, daarna laagste prijs per eenheid
  */
-export function findCandidates(idx, query, { store = null, limit = 5, size = null } = {}) {
+// Woorden die niets aan het product veranderen ("Cola zero sugar" = "Cola zero", "Pindakaas naturel" = "Pindakaas").
+const GENERIC = new Set(['sugar', 'fles', 'pet', 'blik', 'pak', 'pot', 'naturel', 'classic', 'original', 'origineel', 'regular', 'stuk', 'stuks', 'rollen', 'rol', 'laag', 'laags']);
+
+export function findCandidates(idx, query, { store = null, limit = 5, size = null, all = false } = {}) {
   const qTokens = productTokens(query);
   if (!qTokens.length) return [];
   const seed = idx.index.get(qTokens[0].slice(0, 4)) || [];
@@ -91,7 +96,7 @@ export function findCandidates(idx, query, { store = null, limit = 5, size = nul
     const it = idx.items[i];
     if (store && it.store !== store) continue;
     if (!qTokens.every((q) => it.tokens.some((t) => tokenMatch(q, t)))) continue;
-    const extra = it.tokens.length - qTokens.length;
+    const extra = it.tokens.filter((t) => !GENERIC.has(t) && !/^\d/.test(t)).length - qTokens.length;
     let score = 1 - Math.min(0.6, extra * 0.15);
     if (extra === 0) score += 0.2; // precies het gezochte product (zonder merk/inhoud)
     for (const qual of QUALIFIERS) {
@@ -109,6 +114,7 @@ export function findCandidates(idx, query, { store = null, limit = 5, size = nul
     out.push({ item: it, score, unitPrice: up, uncertain: score < 0.95 });
   }
   if (!out.length) return [];
+  if (all) return out.filter((c) => c.score > 0.3).sort((a, b) => b.score - a.score).slice(0, limit);
   const best = Math.max(...out.map((c) => c.score));
   const top = out.filter((c) => c.score >= best - 0.1 && c.score > 0.3);
   // Prijs per eenheid alleen vergelijken binnen dezelfde eenheid (gram vs. stuks is niet vergelijkbaar).

@@ -175,3 +175,25 @@ test('wat jullie nu kopen: meerdere producten (max 3), oude enkele keuze blijft 
   assert.equal(equivalentOf(bier, { store: 'lidl', title: 'Leffe Blond' }), 'ref');
   assert.deepEqual(refsOf({ ref: { name: 'AH Cola zero', store: 'ah' } }), [{ name: 'AH Cola zero', store: 'ah' }]);
 });
+
+test('assortiment: voorstellen voor gelijkwaardige producten (zelfde inhoud, huismerk)', async () => {
+  const { indexAssortment, suggestEquivalents, searchAssortment } = await import('../js/core/assortment.js');
+  const { entryPriceIn, equivalentOf } = await import('../js/core/watch.js');
+  const idx = indexAssortment({
+    ah: [['AH Cola zero sugar', 39, '330 ml'], ['Coca-Cola Zero sugar', 279, '1,5 l'], ['AH Cola zero sugar cherry 6-pack', 329, '6 x 0,33 l']],
+    jumbo: [['Jumbo Cola Zero Sugar 1,5 L', 89, '1.5 L'], ['Jumbo Cola Zero Sugar 6 x 1,5 L', 534, '6 x 1.5 L'], ['Jumbo Cola Light 1,5 L', 95, '1.5 L']],
+    dirk: [['1 de Beste Cola zero', 95, '1,5 liter'], ['1 de Beste Cola zero', 209, '6 x 500 ml']],
+  });
+  const res = suggestEquivalents(idx, 'Cola zero', { size: { amount: 1500, unit: 'ml' }, preferHouse: true, stores: ['ah', 'jumbo', 'dirk'] });
+  const by = Object.fromEntries(res.map((g) => [g.store, g.results.map((r) => r.name)]));
+  assert.equal(by.jumbo[0], 'Jumbo Cola Zero Sugar 1,5 L', 'zelfde inhoud eerst');
+  assert.ok(!by.jumbo.includes('Jumbo Cola Light 1,5 L'), 'light is geen zero');
+  assert.ok(!by.ah.some((n) => /cherry/i.test(n)), 'smaakvariant valt af');
+  assert.equal(by.dirk[0], '1 de Beste Cola zero');
+  assert.equal(searchAssortment(idx, 'cola zero 1,5 liter', { stores: ['jumbo'] })[0].results[0].name, 'Jumbo Cola Zero Sugar 1,5 L');
+  // prijs van zo'n equivalent per liter, en herkennen in een aanbieding
+  const item = { ...W['cola-zero'], equiv: [{ name: 'Jumbo Cola Zero Sugar 1,5 L', store: 'jumbo', price: 89, size: { amount: 1500, unit: 'ml', count: 1 } }] };
+  assert.deepEqual(entryPriceIn(item, item.equiv[0]), { perUnit: 59, per: 'liter' });
+  assert.equal(equivalentOf(item, { store: 'jumbo', title: 'Jumbo Cola Zero 1,5 liter' }), 'equiv', '"sugar" en inhoud hoeven niet in de titel');
+  assert.deepEqual(entryPriceIn({ unit: 'stuk' }, { price: 349, size: { amount: 600, unit: 'g', count: 60 } }), { perUnit: 6, per: 'stuk' }, '60 x 10 g = 60 tabletten');
+});
