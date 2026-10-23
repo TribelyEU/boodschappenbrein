@@ -24,7 +24,9 @@ export function indexAssortment(stores) {
   const items = [];
   for (const [store, rows] of Object.entries(stores || {})) {
     for (const [name, price, sizeText] of rows) {
-      const size = parseSize(sizeText) || parseSize(name);
+      // "16=24 rollen": 16 lange rollen = 24 gewone; voor een eerlijke prijs per rol tellen we 24
+      const eq = String(name).match(/(\d+)\s*=\s*(\d+)\s*rol/i);
+      const size = eq ? { amount: +eq[2], unit: 'st' } : parseSize(sizeText) || parseSize(name);
       items.push({ store, name, price, sizeText, sizeAmount: size?.amount || null, sizeUnit: size?.unit || null });
     }
   }

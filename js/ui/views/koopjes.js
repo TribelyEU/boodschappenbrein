@@ -555,7 +555,8 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
     const normal = p ? Math.round(parseFloat(p) * 100) : null;
     if (!sizeText && !normal) { toast('Vul de inhoud en/of de normale prijs in'); return; }
     if (sizeText && !parseSize(sizeText)) { toast('Inhoud niet herkend; schrijf bijvoorbeeld 300 g of 1,5 liter'); return; }
-    await saveChoice(key, { name: sizeText || 'eigen invoer', sizeText, normal: Number.isFinite(normal) ? normal : null });
+    const picked = sheet.querySelector('[data-own-size]').dataset.name;
+    await saveChoice(key, { name: picked ? `${picked} (${sizeText})` : sizeText || 'eigen invoer', sizeText, normal: Number.isFinite(normal) ? normal : null });
     done();
     toast('Gekozen');
   });
@@ -570,7 +571,6 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
   // 1. Producten die onder de actie zelf vallen (woorden van de titel, met merk)
   const { productsForOffer } = await import('../../core/assortment.js');
   for (const r of productsForOffer(A.idx, o)) {
-    if (unit.base && r.sizeUnit && r.sizeUnit !== unit.base && unit.base !== 'st') continue;
     if (isExcluded(item, r.name)) continue;
     seen.add(r.name + r.price);
     rows.push(r);
@@ -583,7 +583,6 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
       for (const r of grp.results) {
         if (seen.has(r.name + r.price)) continue;
         if (!matchesWatch(item, { title: r.name })) continue; // geen gehaktballen bij "gehakt
-        if (unit.base && r.sizeUnit && r.sizeUnit !== unit.base && !(unit.base === 'st')) continue;
         seen.add(r.name + r.price);
         rows.push(r);
       }
@@ -593,11 +592,26 @@ async function chooseSheet(key, watchId, { onDone = null } = {}) {
   // Producten met een inhoud die in de actie staat ("300 gram") eerst
   const inOffer = (r) => sizeOptionsOf(o).some((sz) => sz.unit === r.sizeUnit && Math.abs(sz.amount - r.sizeAmount) <= 1);
   rows.sort((a, b) => inOffer(b) - inOffer(a));
+  // Past de inhoud niet bij de vergelijkingseenheid (bananen "5 stuks" terwijl je per kilo vergelijkt)? Dan wel tonen,
+  // maar na kiezen het gewicht laten invullen.
+  const fits = (r) => !unit.base || unit.base === 'st' || (r.sizeUnit === unit.base && r.sizeAmount);
+  const unitWord = unit.base === 'g' ? 'het gewicht, bv. 1 kg' : unit.base === 'ml' ? 'de inhoud, bv. 1,5 l' : 'de inhoud';
   list.innerHTML = rows.slice(0, 15).map((r, i) => `<div class="between small" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px">
-    <div style="min-width:0"><div>${esc(r.name)}</div><div class="tiny muted">${esc(r.sizeText || '')}${r.sizeText ? ' · ' : ''}normaal ${esc(euro(r.price))} (Checkjebon)</div></div>
+    <div style="min-width:0"><div>${esc(r.name)}</div><div class="tiny muted">${esc(r.sizeText || 'inhoud onbekend')} · normaal ${esc(euro(r.price))} (Checkjebon)${fits(r) ? '' : ` · <span style="color:var(--warn)">vul daarna ${esc(unitWord)} in</span>`}</div></div>
     <button class="btn small" data-pick="${i}">Deze</button></div>`).join('');
   list.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
     const r = rows[+b.dataset.pick];
+    if (!fits(r)) {
+      // Naam en prijs overnemen in "Of vul zelf in"; alleen de inhoud nog invullen
+      const sizeIn = sheet.querySelector('[data-own-size]');
+      sheet.querySelector('[data-own-price]').value = (r.price / 100).toFixed(2).replace('.', ',');
+      sizeIn.dataset.name = r.name;
+      sizeIn.placeholder = unit.base === 'g' ? 'Gewicht, bv. 1 kg' : 'Inhoud, bv. 1,5 l';
+      sizeIn.focus();
+      sizeIn.scrollIntoView({ block: 'center' });
+      toast(`Vul ${unitWord} in en tik op ✓`);
+      return;
+    }
     await saveChoice(key, { name: r.name, sizeText: r.sizeText || (r.sizeAmount ? sizeLbl({ amount: r.sizeAmount, unit: r.sizeUnit }) : ''), normal: r.price });
     done();
     toast('Gekozen');

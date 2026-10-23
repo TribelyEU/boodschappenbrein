@@ -340,7 +340,9 @@ export function entryPriceIn(item, entry) {
   if (entry?.price == null) return null;
   const unit = unitOf(item);
   if (unit.base == null) return { perUnit: entry.price, per: unit.label };
-  const sz = entry.size;
+  // Eerder opgeslagen "8=12 rollen" telde 8; het zijn 12 gewone rollen
+  const eq = String(entry.name || '').match(/(\d+)\s*=\s*(\d+)\s*rol/i);
+  const sz = eq ? { amount: +eq[2], unit: 'st' } : entry.size;
   if (sz?.amount && sz.unit === unit.base) return { perUnit: Math.round(entry.price / (sz.amount / unit.per)), per: unit.label };
   if (unit.base === 'st' && sz?.count > 1) return { perUnit: Math.round(entry.price / sz.count), per: unit.label };
   return { perPack: entry.price, per: 'verpakking' };

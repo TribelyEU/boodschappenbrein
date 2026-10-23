@@ -159,6 +159,8 @@ export function sizesIn(text) {
   // 8-packs 250 ml · 6-pack blik a 33 cl · 250 ml 4-pack → aantal × inhoud
   eat(new RegExp(`(\\d+)\\s*-?\\s*packs?\\s+(?:[a-z]+\\s+){0,2}(?:a\\s+)?${N}\\s*${U}\\b(?!\\s*(?:of|/))`, 'g'), (m) => { const one = unitOf(m[3], m[2]); options.push({ amount: Math.round(one.amount * +m[1] * 1000) / 1000, unit: one.unit, count: +m[1] }); });
   eat(new RegExp(`${N}\\s*${U}\\s+(\\d+)\\s*-?\\s*packs?\\b`, 'g'), (m) => { const one = unitOf(m[2], m[1]); options.push({ amount: Math.round(one.amount * +m[3] * 1000) / 1000, unit: one.unit, count: +m[3] }); });
+  // "16=24 rollen" → 24 gewone rollen
+  eat(/(\d+)\s*=\s*(\d+)\s*(?:rollen|rol)\b/g, (m) => { options.push({ amount: +m[2], unit: 'st' }); });
   // 2-pack · 4 pack (aantal stuks)
   eat(/\b(\d+)\s*-?\s*pack\b/g, (m) => { options.push({ amount: +m[1], unit: 'st' }); });
   // 320 - 350 gram · 175-218 g · 500-1000 g
