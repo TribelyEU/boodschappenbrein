@@ -9,7 +9,7 @@
 
 import { productTokens, detectBrand, parseSize } from './products.js';
 import { normalizeText, stem } from './text.js';
-import { effectiveDeal, adviseDeal, priceStats } from './stockpile.js';
+import { effectiveDeal, adviseDeal, priceStats, entryUnit } from './stockpile.js';
 import { neededWithin } from './stock-model.js';
 import { daysBetween } from './dates.js';
 
@@ -130,53 +130,164 @@ export function brandsByProduct(lines) {
 
 const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length ? (s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) : null; };
 
+// ---------------- Inhoud en eenheid ----------------
+
+const UNITS = {
+  ml: ['ml', 1], cl: ['ml', 10], dl: ['ml', 100], l: ['ml', 1000], lt: ['ml', 1000], ltr: ['ml', 1000], liter: ['ml', 1000], milliliter: ['ml', 1],
+  g: ['g', 1], gr: ['g', 1], gram: ['g', 1], kg: ['g', 1000], kilo: ['g', 1000], kilogram: ['g', 1000],
+  st: ['st', 1], stuk: ['st', 1], stuks: ['st', 1], rol: ['st', 1], rollen: ['st', 1], wasbeurten: ['st', 1], wasbeurt: ['st', 1],
+  tabs: ['st', 1], tabletten: ['st', 1], zakjes: ['st', 1], pads: ['st', 1], capsules: ['st', 1], cups: ['st', 1], eieren: ['st', 1], luiers: ['st', 1], doekjes: ['st', 1],
+};
+const U = '(milliliter|ml|cl|dl|ltr|lt|liter|l|kilogram|kilo|kg|gram|gr|g|stuks|stuk|st|rollen|rol|wasbeurten|wasbeurt|tabletten|tabs|zakjes|pads|capsules|cups|eieren|luiers|doekjes)';
+const N = '(\\d+(?:\\.\\d+)?)';
+const unitOf = (u, n) => { const [unit, f] = UNITS[u.toLowerCase()]; return { amount: Math.round(parseFloat(n) * f * 1000) / 1000, unit }; };
+
+/**
+ * Alle inhouden die in een tekst genoemd worden.
+ * "6 x 0,33 l" → 1980 ml · "24 blikken à 33cl" → 7920 ml · "320 - 350 gram" → bereik · "750 of 900 gram" → twee opties.
+ * @returns {{ options: {amount, unit}[], ranges: {min, max, unit}[], per: {amount, unit}|null }}
+ */
+export function sizesIn(text) {
+  let t = ' ' + String(text || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/[àá]/g, 'a').replace(/–/g, '-') + ' ';
+  const options = []; const ranges = []; let per = null;
+  const eat = (re, fn) => { t = t.replace(re, (...m) => { fn(m); return ' § '; }); };
+  // prijs per 100 g / per kilo (Jumbo, Hoogvliet): de prijs geldt voor die hoeveelheid
+  // ("per stuk" zonder aantal is geen inhoud: dat stuk kan zelf een pak van 6 zijn)
+  eat(new RegExp(`\\bper\\s*${N}?\\s*${U}\\b`, 'g'), (m) => { const u = unitOf(m[2], m[1] || '1'); if (m[1] || u.unit !== 'st') per = u; });
+  // 6 x 0,33 l · 24 blikken a 33cl · 4 stuks van 125 gram
+  eat(new RegExp(`(\\d+)\\s*(?:x|×|[a-z]+\\s+(?:a|van))\\s*${N}\\s*${U}\\b`, 'g'), (m) => { const one = unitOf(m[3], m[2]); options.push({ amount: Math.round(one.amount * +m[1] * 1000) / 1000, unit: one.unit, count: +m[1] }); });
+  // 2-pack · 4 pack (aantal stuks)
+  eat(/\b(\d+)\s*-?\s*pack\b/g, (m) => { options.push({ amount: +m[1], unit: 'st' }); });
+  // 320 - 350 gram · 175-218 g · 500-1000 g
+  eat(new RegExp(`${N}\\s*(?:-|tot)\\s*${N}\\s*${U}\\b`, 'g'), (m) => { const a = unitOf(m[3], m[1]); const b = unitOf(m[3], m[2]); ranges.push({ min: Math.min(a.amount, b.amount), max: Math.max(a.amount, b.amount), unit: a.unit }); });
+  // 750 of 900 gram · 80 of 125 gram
+  eat(new RegExp(`${N}\\s*(?:of|/|en)\\s*${N}\\s*${U}\\b`, 'g'), (m) => { options.push(unitOf(m[3], m[1]), unitOf(m[3], m[2])); });
+  // losse inhouden
+  eat(new RegExp(`(?:^|[^\\d.])${N}\\s*${U}\\b`, 'g'), (m) => { options.push(unitOf(m[2], m[1])); });
+  return { options, ranges, per };
+}
+
+const sameAmount = (a, b) => a && b && a.unit === b.unit && Math.abs(a.amount - b.amount) <= Math.max(0.5, b.amount * 0.02);
+
+/**
+ * De inhoud van de verpakking waar de actieprijs voor geldt.
+ * Bij meerdere mogelijkheden ("150 of 400 gram", "320 - 350 gram") alleen als jullie eigen verpakking ertussen zit;
+ * anders is het niet eerlijk te vergelijken (null).
+ * @returns {{ size: {amount, unit}|null, how: 'exact'|'per'|'zelfde-als-jullie'|null }}
+ */
+export function offerSize(offer, own = null) {
+  for (const src of [offer.size, offer.title]) {
+    const { options, ranges, per } = sizesIn(src);
+    if (per) return { size: per, how: 'per' };
+    const same = (a, b) => a.unit === b.unit && Math.abs(a.amount - b.amount) <= Math.max(0.5, b.amount * 0.002);
+    const distinct = options.filter((o, i) => options.findIndex((x) => same(x, o)) === i);
+    if (!distinct.length && !ranges.length) continue;
+    if (distinct.length === 1 && !ranges.length) return { size: distinct[0], how: 'exact' };
+    if (own && (distinct.some((o) => sameAmount(o, own)) || ranges.some((r) => r.unit === own.unit && own.amount >= r.min - 0.5 && own.amount <= r.max + 0.5))) {
+      return { size: own, how: 'zelfde-als-jullie' };
+    }
+    return { size: null, how: null, ambiguous: true };
+  }
+  return { size: null, how: null };
+}
+
+/** Basiseenheden (kilo, liter of stuks) in een verpakking. */
+const baseOf = (size) => (size ? (size.unit === 'st' ? size.amount : size.amount / 1000) : null);
+const unitName = (unit) => (unit === 'st' ? 'stuk' : unit === 'g' ? 'kilo' : unit === 'ml' ? 'liter' : 'verpakking');
+
+/** Wat jullie zelf normaal betalen, per kilo/liter/stuk als de inhoud bekend is. */
+function ownReference(stats) {
+  if (!stats.observations) return null;
+  const size = stats.packSize || null;
+  if (stats.perBase) return { perBase: stats.typical, size, unit: size?.unit || (stats.unitLabel === 'kilo' ? 'g' : stats.unitLabel === 'liter' ? 'ml' : 'st') };
+  if (size?.amount) return { perBase: Math.round(stats.typical / baseOf(size)), size, unit: size.unit };
+  return { perPack: stats.typical, size: null, unit: null };
+}
+
 /**
  * Advies voor één aanbieding × één eigen product.
  * ctx: { facts, lines, adjustments, products, today, vacations, stockpile, predictions, freezerFree }
+ *
+ * Er wordt alleen vergeleken als dat eerlijk kan:
+ *  - inhoud van de aanbieding én van jullie product bekend, zelfde soort eenheid (gewicht, volume of stuks)
+ *    → per kilo, liter of stuk;
+ *  - inhoud aan één of beide kanten onbekend → alleen per verpakking, en alleen in dezelfde winkel waar jullie
+ *    het product kopen (dan is het vrijwel zeker dezelfde verpakking);
+ *  - een %-korting of x+y gratis heeft de normale prijs in díe winkel nodig: de "van"-prijs van de aanbieding,
+ *    of wat jullie daar zelf betaalden. Een AH-prijs wordt nooit als normale prijs van een andere winkel gebruikt.
  */
 export function adviseOffer(offer, match, ctx) {
   const product = ctx.products.get(match.productId);
   const deal = parseMechanism(offer.mechanism, offer) || (offer.price != null ? { type: 'prijs', price: offer.price } : null);
   if (!deal) return null;
-  const size = parseSize(offer.size || '') || parseSize(offer.title);
   const stats = priceStats(ctx.facts, product.id);
-  const normal = offer.was ?? (stats.packSize && size && stats.packSize.amount === size.amount ? stats.packPrice : null) ?? stats.packPrice ?? null;
+  const own = ownReference(stats);
+  const sameStore = (ctx.facts || []).some((f) => f.productId === product.id && f.store === offer.store);
+  const { size: offerSz, how: sizeHow } = offerSize(offer, own?.size || stats.packSize);
   const daysLeft = offer.validTo ? daysBetween(ctx.today, offer.validTo) : 7;
-  const base = { offer, productId: product.id, name: product.name, brandMatch: match.brandMatch, daysLeft, deal };
+  const base = { offer, productId: product.id, name: product.name, brandMatch: match.brandMatch, daysLeft, deal, offerSize: offerSz, sizeHow };
 
-  // 1. Op de inslaglijst → volledig inslagadvies
+  // Normale prijs van de aanbiedingsverpakking in die winkel (nodig voor %, gratis, 2e halve prijs, eurokorting).
+  let normal = offer.was ?? null;
+  if (normal == null && sameStore) {
+    const here = priceStats((ctx.facts || []).filter((f) => f.store === offer.store), product.id);
+    if (here.observations) {
+      if (offerSz && here.perBase) normal = Math.round(here.typical * baseOf(offerSz));
+      else if (offerSz && here.packSize && sameAmount(here.packSize, offerSz)) normal = here.packPrice;
+      else if (!offerSz) normal = here.packPrice;
+    }
+  }
+  const needsNormal = deal.type !== 'prijs' && deal.type !== 'xvoor';
+  if (needsNormal && normal == null) return null;
+
+  // 1. Op de inslaglijst → volledig inslagadvies (per eenheid van het inslagproduct)
   const entry = (ctx.stockpile || []).find((e) => e.members.some((m) => m.productId === product.id));
   if (entry) {
-    if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return null; // ook eurokorting heeft een normale prijs nodig
-    const a = adviseDeal(entry, product.id, { ...deal, normal, size: size || undefined }, ctx);
+    if (!offerSz && !sameStore) return null; // andere winkel, inhoud onbekend: niet eerlijk te vergelijken
+    if (offerSz && own?.unit && offerSz.unit !== own.unit) return null;
+    if (!sameStore && entryUnit(entry, ctx.lines).unit === 'pak') return null; // jullie inhoud onbekend: per verpakking vergelijken kan alleen in dezelfde winkel
+    const a = adviseDeal(entry, product.id, { ...deal, normal: normal ?? undefined, size: offerSz || undefined }, ctx);
     if (a.verdict !== 'inslaan' && a.verdict !== 'redelijk') return { ...base, kind: 'inslag', verdict: a.verdict, saving: 0, advice: a };
     return { ...base, kind: 'inslag', entryId: entry.id, verdict: a.verdict, qty: a.buyPacks, saving: Math.max(0, a.saving || 0), effBase: a.effBase, unitLabel: a.unitLabel, advice: a };
   }
 
   // 2. Vast gekocht product: vergelijk met wat jullie normaal betalen
-  if (!stats.observations || stats.observations < 2) return null;
-  if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return null;
+  if (!own || !stats.observations || stats.observations < 2) return null;
   const eff = effectiveDeal(deal, normal ?? 0);
-  // Per eenheid vergelijken als dat kan
-  let effBase = eff.unitPrice;
-  let unitLabel = 'verpakking';
-  if (stats.perBase && size?.amount) {
-    const unitAmount = size.unit === 'st' ? size.amount : size.amount / 1000;
-    effBase = Math.round(eff.unitPrice / unitAmount);
-    unitLabel = stats.unitLabel;
-  } else if (stats.perBase) {
-    return null; // inhoud van de aanbieding onbekend: niet eerlijk te vergelijken
-  }
-  const discountVsYou = stats.typical ? 1 - effBase / stats.typical : 0;
-  if (discountVsYou < 0.12) return { ...base, kind: 'vast', verdict: 'niet', saving: 0, discountVsYou };
   const qtys = ctx.lines.filter((l) => l.productId === product.id && l.kind === 'product').map((l) => l.qty || 1);
   const typicalQty = Math.max(1, Math.round(median(qtys) || 1));
-  const qty = Math.ceil(typicalQty / eff.bundle) * eff.bundle;
-  const perPackNormalForYou = stats.perBase && size?.amount ? stats.typical * (size.unit === 'st' ? size.amount : size.amount / 1000) : stats.typical;
-  const saving = Math.round(qty * (perPackNormalForYou - eff.unitPrice));
+
+  let effBase; let ownBase; let unitLabel; let packBase; let ownPackBase;
+  if (own.perBase != null && offerSz) {
+    if (offerSz.unit !== own.unit) return null; // gewicht ≠ volume ≠ stuks
+    packBase = baseOf(offerSz);
+    ownPackBase = baseOf(own.size) || packBase;
+    effBase = Math.round(eff.unitPrice / packBase);
+    ownBase = own.perBase;
+    unitLabel = unitName(offerSz.unit);
+  } else if (sameStore && (!offerSz || !own.size || own.perPack != null)) {
+    // Zelfde winkel, inhoud niet aan beide kanten bekend: per verpakking
+    if (own.perBase != null && !own.size) return null;
+    packBase = 1; ownPackBase = 1;
+    effBase = eff.unitPrice;
+    ownBase = own.perPack ?? (own.size ? Math.round(own.perBase * baseOf(own.size)) : null);
+    if (ownBase == null) return null;
+    unitLabel = 'verpakking';
+  } else {
+    return null; // andere winkel en inhoud niet vergelijkbaar
+  }
+
+  const discountVsYou = ownBase ? 1 - effBase / ownBase : 0;
+  const compare = { effBase, ownBase, unitLabel, sizeKnown: packBase !== 1 || unitLabel !== 'verpakking' };
+  if (discountVsYou < 0.12) return { ...base, ...compare, kind: 'vast', verdict: 'niet', saving: 0, discountVsYou };
+  // Zoveel aanbiedingsverpakkingen als nodig voor wat jullie normaal in één keer kopen, in hele actiebundels
+  const needBase = typicalQty * ownPackBase;
+  const packs = Math.max(1, Math.ceil(needBase / packBase - 0.15));
+  const qty = Math.ceil(packs / eff.bundle) * eff.bundle;
+  const saving = Math.round(qty * (packBase * ownBase - eff.unitPrice));
   const pred = ctx.predictions?.get(product.id);
   const needSoon = pred ? neededWithin(pred, Math.max(1, daysLeft)) : false;
-  return { ...base, kind: 'vast', verdict: 'inslaan', qty, saving, effBase, unitLabel, discountVsYou, needSoon, bundle: eff.bundle, dealLabel: eff.label };
+  return { ...base, ...compare, kind: 'vast', verdict: 'inslaan', qty, saving, discountVsYou, needSoon, bundle: eff.bundle, dealLabel: eff.label };
 }
 
 /**

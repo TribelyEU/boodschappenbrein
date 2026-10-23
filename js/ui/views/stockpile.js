@@ -6,6 +6,7 @@ import { euro, parseAmount, parseNumber } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate } from '../../core/dates.js';
 import { priceStats, entryPrediction, adviseDeal, suggestEntries, DEAL_TYPES, LOCATIONS, toDisplay } from '../../core/stockpile.js';
+import { offerSize } from '../../core/offers.js';
 import { tag, empty, noDataCard } from '../components.js';
 import { pickProduct } from './product.js';
 
@@ -205,6 +206,7 @@ function dealSheet(entry) {
         <label class="field">Winkel<select class="input" name="store">${[...new Set([...stores, 'ah', 'lidl', 'jumbo', 'kruidvat'])].map((id) => `<option value="${id}">${esc(storeName(id))}</option>`).join('')}</select></label>
         <label class="field">Soort actie<select class="input" name="type">${Object.entries(DEAL_TYPES).map(([k, l]) => `<option value="${k}" ${k === 'gratis' ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Normale prijs per verpakking (€)<input class="input num" inputmode="decimal" name="normal" placeholder="uit jullie bonnen"></label>
+        <label class="field">Inhoud per verpakking<input class="input" name="size" placeholder="bv. 36 stuks, 1 kg, 6 x 0,33 l" autocomplete="off"></label>
       </div>
       <div class="grid two" style="gap:10px" data-extra></div>
       <div data-result></div>
@@ -232,6 +234,12 @@ function dealSheet(entry) {
     if (normal != null) deal.normal = normal;
     const pid = fd.get('productId');
     const stats = priceStats(c.facts, pid);
+    const sz = String(fd.get('size') || '').trim();
+    if (sz) {
+      const parsed = offerSize({ size: sz }, stats.packSize);
+      if (parsed.size) deal.size = parsed.size;
+    }
+    if (!form.size.value && stats.packSize) form.size.placeholder = `${stats.packSize.unit === 'st' ? `${stats.packSize.amount} stuks` : stats.packSize.unit === 'g' ? `${stats.packSize.amount} g` : `${stats.packSize.amount} ml`} (zoals jullie kopen)`;
     if (!form.normal.value && stats.packPrice) form.normal.placeholder = `${(stats.packPrice / 100).toFixed(2).replace('.', ',')} (uit bonnen)`;
     if ((deal.type === 'prijs' && deal.price == null) || (deal.type === 'xvoor' && deal.total == null)) { result.innerHTML = ''; sheet.querySelector('[data-add]').disabled = true; return; }
     try {

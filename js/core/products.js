@@ -60,9 +60,9 @@ const UNIT_MAP = {
   ml: ['ml', 1], milliliter: ['ml', 1], cl: ['ml', 10], dl: ['ml', 100], l: ['ml', 1000], lt: ['ml', 1000], ltr: ['ml', 1000], liter: ['ml', 1000],
   g: ['g', 1], gr: ['g', 1], gram: ['g', 1], kg: ['g', 1000], kilo: ['g', 1000], kilogram: ['g', 1000],
   st: ['st', 1], stk: ['st', 1], stuk: ['st', 1], stuks: ['st', 1], rol: ['st', 1], rollen: ['st', 1],
-  wasbeurt: ['st', 1], wasbeurten: ['st', 1], tabs: ['st', 1], tabletten: ['st', 1], zakjes: ['st', 1], pads: ['st', 1], capsules: ['st', 1], eieren: ['st', 1],
+  wasbeurt: ['st', 1], wasbeurten: ['st', 1], tabs: ['st', 1], tabletten: ['st', 1], zakjes: ['st', 1], pads: ['st', 1], capsules: ['st', 1], cups: ['st', 1], eieren: ['st', 1], luiers: ['st', 1], doekjes: ['st', 1],
 };
-const UNIT_RE = '(ml|milliliter|cl|dl|ltr|lt|liter|l|kilogram|kilo|kg|gram|gr|g|stuks|stuk|stk|st|rollen|rol|wasbeurten|wasbeurt|tabletten|tabs|zakjes|pads|capsules|eieren)';
+const UNIT_RE = '(ml|milliliter|cl|dl|ltr|lt|liter|l|kilogram|kilo|kg|gram|gr|g|stuks|stuk|stk|st|rollen|rol|wasbeurten|wasbeurt|tabletten|tabs|zakjes|pads|capsules|cups|eieren|luiers|doekjes)';
 const MULTI_RE = new RegExp(`(\\d+)\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*${UNIT_RE}\\b`, 'i');
 const SINGLE_RE = new RegExp(`(?:^|\\s|per\\s)(\\d+(?:[.,]\\d+)?)\\s*${UNIT_RE}\\b`, 'i');
 

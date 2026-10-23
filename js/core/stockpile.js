@@ -161,7 +161,7 @@ export function adviseDeal(entry, productId, deal, ctx) {
   if (!member) throw new Error('Product hoort niet bij dit item.');
   const stats = priceStats(ctx.facts, productId);
   const normal = deal.normal ?? stats.packPrice;
-  if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return { verdict: 'onbekend', reasons: ['Normale prijs onbekend: vul die in.'] };
+  if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return { verdict: 'onbekend', reasons: ['Normale prijs onbekend: vul die in.'], warnings: [] };
   const eff = effectiveDeal(deal, normal);
   const reasons = [];
   const warnings = [];
@@ -169,6 +169,13 @@ export function adviseDeal(entry, productId, deal, ctx) {
   // Prijs per eenheid van deze verpakking
   const size = deal.size || stats.packSize;
   const { unit } = entryUnit(entry, ctx.lines);
+  if (deal.size && unit !== 'pak' && deal.size.unit !== unit) {
+    const kind = (u) => (u === 'g' ? 'gewicht' : u === 'ml' ? 'inhoud in liters' : 'stuks');
+    return { verdict: 'onbekend', reasons: [`Niet te vergelijken: deze aanbieding is in ${kind(deal.size.unit)}, jullie product in ${kind(unit)}.`], warnings: [] };
+  }
+  if (deal.size && unit === 'pak' && stats.packSize && !(stats.packSize.unit === deal.size.unit && Math.abs(stats.packSize.amount - deal.size.amount) <= deal.size.amount * 0.02)) {
+    return { verdict: 'onbekend', reasons: ['Andere verpakking dan jullie kopen en de inhoud van jullie eigen verpakking is niet bekend genoeg om per stuk/kilo te vergelijken.'], warnings: [] };
+  }
   const perPackBase = unit !== 'pak' && size?.amount ? size.amount : null; // basiseenheden per verpakking
   const toPerBase = (packCents) => (perPackBase ? Math.round(packCents / (unit === 'st' ? perPackBase : perPackBase / 1000)) : packCents);
   const effBase = toPerBase(eff.unitPrice);

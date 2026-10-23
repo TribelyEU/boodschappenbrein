@@ -11,17 +11,27 @@ import { tag, empty, sectionHead } from '../components.js';
 let busy = false;
 let query = '';
 
+function sizeLabel(sz) {
+  if (!sz?.amount) return '';
+  if (sz.unit === 'st') return `${sz.amount} stuks`;
+  if (sz.unit === 'g') return sz.amount >= 1000 ? `${String(sz.amount / 1000).replace('.', ',')} kg` : `${sz.amount} g`;
+  return sz.amount >= 1000 ? `${String(sz.amount / 1000).replace('.', ',')} l` : `${sz.amount} ml`;
+}
+
 function itemRow(it) {
   const o = it.offer;
-  const sub = [
-    o.mechanism || (o.price != null ? `voor ${euro(o.price)}` : ''),
-    it.effBase != null ? `${euro(it.effBase)} per ${it.unitLabel}` : '',
-    it.daysLeft != null && it.daysLeft <= 2 ? (it.daysLeft <= 0 ? 'laatste dag' : `nog ${it.daysLeft} dagen`) : '',
-  ].filter(Boolean).join(' · ');
+  const sizeText = it.offerSize ? sizeLabel(it.offerSize) : '';
+  const what = [o.mechanism || (o.price != null ? `voor ${euro(o.price)}` : ''), sizeText,
+    it.daysLeft != null && it.daysLeft <= 2 ? (it.daysLeft <= 0 ? 'laatste dag' : `nog ${it.daysLeft} dagen`) : ''].filter(Boolean).join(' · ');
+  const cmp = it.effBase != null
+    ? `${euro(it.effBase)} per ${it.unitLabel}${it.ownBase ? ` · jullie normaal ${euro(it.ownBase)}` : ''}${it.unitLabel === 'verpakking' ? ' (inhoud niet vermeld, zelfde winkel)' : ''}`
+    : '';
+  const wrap = 'white-space:normal;overflow:visible;text-overflow:clip';
   return html`<div class="row-item" style="align-items:flex-start;flex-wrap:wrap">
     <div class="grow" style="min-width:58%">
       <div class="title" style="white-space:normal">${it.name}${it.brandMatch === false ? html` <span class="chip warn">ander merk</span>` : ''}</div>
-      <div class="sub" style="white-space:normal">${o.title} · ${sub}</div>
+      <div class="sub" style="${wrap}">${o.title}${what ? ` · ${what}` : ''}</div>
+      ${cmp ? html`<div class="tiny" style="${wrap};margin-top:2px;color:var(--ink-2)">${cmp}</div>` : ''}
       ${it.kind === 'inslag' || it.needSoon ? html`<div class="tiny" style="margin-top:3px;color:var(--good);font-weight:650">${it.kind === 'inslag' ? 'Inslaan' : 'Heb je deze week nodig'}</div>` : ''}
     </div>
     <div style="text-align:right">
@@ -72,6 +82,7 @@ function offersInfo() {
   return `<p>Elke ochtend haalt een klein script op GitHub de aanbiedingen op: van AH via de AH-app, van Lidl, Jumbo, Dirk, Hoogvliet en Action van hun eigen aanbiedingenpagina. Jullie aankopen gaan daar nooit naartoe: de vergelijking gebeurt op deze telefoon.</p>
 <ul style="padding-left:18px;margin:8px 0">${rows}</ul>
 <p>Je ziet alleen acties die voor jullie echt goedkoper zijn dan wat jullie normaal betalen. Het bedrag is de besparing voor de voorgestelde hoeveelheid. Lidl-prijzen met "Lidl Plus" gelden met de Lidl Plus-app.</p>
+<p><strong>Inhoud en eenheid.</strong> De app vergelijkt per kilo, liter of stuk: een sixpack blikjes naast jullie 1,5-literfles, een pak van 36 cups naast jullie pak van 20. Kilo's worden nooit met liters of stuks vergeleken. Noemt een actie geen inhoud, of meerdere ("150 of 400 gram"), dan vergelijkt de app alleen per verpakking, en alleen in de winkel waar jullie het product kopen. Een %-korting of 1+1 bij een andere winkel telt alleen als die winkel zijn eigen normale prijs noemt.</p>
 <p>Zie je bij Kruidvat, Wibra of ergens anders iets goeds? Tik bij een inslagproduct op het <strong>labeltje</strong> om de aanbieding te beoordelen.</p>`;
 }
 

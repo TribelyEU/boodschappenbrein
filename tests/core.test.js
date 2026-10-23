@@ -807,3 +807,86 @@ test('aanbiedingenbestand: status en ouderdom', () => {
   assert.equal(st.stale, true);
   assert.equal(st.age, 11);
 });
+
+// ---------- inhoud en eenheid bij aanbiedingen ----------
+import { sizesIn, offerSize, adviseOffer } from '../js/core/offers.js';
+
+test('inhoud uit actieteksten: multipacks, trays, bereik, opties, per 100 g', () => {
+  const one = (t, own) => offerSize({ size: t }, own).size;
+  assert.deepEqual(one('6 x 0,33 l'), { amount: 1980, unit: 'ml', count: 6 });
+  assert.deepEqual(one('Tray met 24 blikken à 33cl'), { amount: 7920, unit: 'ml', count: 24 });
+  assert.deepEqual(one('Zak 1 kilo'), { amount: 1000, unit: 'g' });
+  assert.deepEqual(one('Alle doosjes à 20 zakjes'), { amount: 20, unit: 'st' });
+  assert.deepEqual(one('12 rollen'), { amount: 12, unit: 'st' });
+  assert.deepEqual(offerSize({ size: '100 g', mechanism: '1,19 per 100g' }).size, { amount: 100, unit: 'g' });
+  assert.deepEqual(one('per 500 gram'), { amount: 500, unit: 'g' });
+  // meerdere mogelijkheden: alleen als jullie verpakking erbij hoort
+  assert.equal(one('Kuip 70 - 210 gram'), null);
+  assert.deepEqual(one('Kuip 70 - 210 gram', { amount: 150, unit: 'g' }), { amount: 150, unit: 'g' });
+  assert.equal(one('Bak 150 gram of bak 400 gram', { amount: 250, unit: 'g' }), null);
+  assert.deepEqual(one('Schaal 750 of 900 gram', { amount: 900, unit: 'g' }), { amount: 900, unit: 'g' });
+  assert.equal(one('4 x 0,5 l/6 x 0,33 l'), null, 'twee verschillende packs');
+  assert.equal(one('Per stuk'), null);
+  assert.equal(sizesIn('Verse zalmfilet').options.length, 0);
+});
+
+test('aanbieding vergelijken op inhoud: per liter, andere verpakking, andere eenheid', () => {
+  const { memory, lines } = storeAll([
+    ...buys('AH Cola 1,5L', Array.from({ length: 6 }, (_, i) => [addDays('2026-08-01', i * 7), 2, 150]), 'ah'), // € 1,00 per liter
+    ...buys('Pampers Baby Dry 44 luiers', Array.from({ length: 4 }, (_, i) => [addDays('2026-08-01', i * 14), 1, 1320]), 'ah'), // € 0,30 per luier
+  ]);
+  const facts = buildFacts(lines, memory.products);
+  const ctx = { facts, lines, products: memory.products, today: '2026-10-23', stockpile: [], predictions: new Map() };
+  const cola = lines.find((l) => /Cola/.test(l.rawName)).productId;
+  const pampers = lines.find((l) => /Pampers/.test(l.rawName)).productId;
+  const adv = (offer, pid) => adviseOffer({ validTo: '2026-10-27', ...offer }, { productId: pid, brandMatch: null }, ctx);
+
+  // 6 x 0,33 l voor 2,99 = € 1,51 per liter → duurder dan jullie € 1,00, hoewel het "per pak" goedkoper lijkt dan 2 flessen
+  const a = adv({ store: 'jumbo', title: 'Cola blikjes', size: '6 x 0,33 l', price: 299, mechanism: 'voor 2,99' }, cola);
+  assert.equal(a.unitLabel, 'liter');
+  assert.equal(a.effBase, 151);
+  assert.equal(a.ownBase, 100);
+  assert.equal(a.verdict, 'niet');
+
+  // 1,5 l voor 0,99 per fles bij Dirk: € 0,66 per liter → wel voordelig; besparing per liter gerekend
+  const b = adv({ store: 'dirk', title: 'Cola', size: 'Fles 1,5 liter', price: 99, mechanism: 'voor 0,99' }, cola);
+  assert.equal(b.verdict, 'inslaan');
+  assert.equal(b.qty, 2);
+  assert.equal(b.saving, 2 * (150 - 99));
+
+  // Grotere verpakking: 2 liter voor 1,40 → 0,70 per liter; jullie kopen normaal 3 liter → 2 flessen (4 l) wordt 2
+  const c = adv({ store: 'dirk', title: 'Cola', size: '2 liter', price: 140 }, cola);
+  assert.equal(c.effBase, 70);
+  assert.equal(c.qty, 2);
+  assert.equal(c.saving, Math.round(2 * (2 * 100 - 140)));
+
+  // Andere winkel zonder inhoud: niet vergelijken
+  assert.equal(adv({ store: 'jumbo', title: 'Cola', price: 99, mechanism: 'voor 0,99' }, cola), null);
+  // Gewicht tegenover volume: niet vergelijken
+  assert.equal(adv({ store: 'dirk', title: 'Cola', size: '500 gram', price: 99 }, cola), null);
+  // %-korting bij een andere winkel zonder van-prijs: AH-prijs is géén normale prijs van Jumbo
+  assert.equal(adv({ store: 'jumbo', title: 'Cola', size: '1,5 liter', mechanism: '25% korting' }, cola), null);
+  // ...maar met de van-prijs van die winkel wel
+  const d = adv({ store: 'jumbo', title: 'Cola', size: '1,5 liter', was: 180, mechanism: '50% korting' }, cola);
+  assert.equal(d.effBase, 60);
+
+  // Luiers: 2+2 gratis met van-prijs 16,00 voor 50 stuks → € 0,16 per luier tegen jullie € 0,30
+  const e = adv({ store: 'jumbo', title: 'Pampers Baby Dry', size: '50 luiers', was: 1600, mechanism: '2+2 gratis' }, pampers);
+  assert.equal(e.unitLabel, 'stuk');
+  assert.equal(e.effBase, 16);
+  assert.equal(e.qty, 4, 'hele bundel van 4');
+});
+
+test('inslag: aanbieding in een andere eenheid wordt niet vergeleken', () => {
+  const { memory, lines } = storeAll(buys('Lidl Koffiecups 20 stuks', Array.from({ length: 5 }, (_, i) => [addDays('2026-07-01', i * 14), 2, 329]), 'lidl'));
+  const facts = buildFacts(lines, memory.products);
+  const pid = lines[0].productId;
+  const entry = { id: 'k', name: 'Koffiecups', location: 'kast', maxWeeks: 12, members: [{ productId: pid, role: 'standaard' }] };
+  const ctx = { facts, lines, products: memory.products, today: '2026-10-23', stockpile: [entry], predictions: new Map(), adjustments: [], vacations: [] };
+  const a = adviseOffer({ store: 'ah', title: 'Koffiecups', size: '250 gram', price: 299, validTo: '2026-10-27' }, { productId: pid, brandMatch: null }, ctx);
+  assert.equal(a, null);
+  const b = adviseOffer({ store: 'ah', title: 'Koffiecups 36 stuks', price: 499, validTo: '2026-10-27' }, { productId: pid, brandMatch: null }, ctx);
+  assert.equal(b.kind, 'inslag');
+  assert.equal(b.unitLabel, 'stuk');
+  assert.equal(b.effBase, 14); // 4,99 / 36
+});
