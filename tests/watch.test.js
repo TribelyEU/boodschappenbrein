@@ -244,3 +244,19 @@ test('zelf ingevulde inhoud bij een product: per liter vergelijken ook als de bo
   const st = priceStats(facts, 'p');
   assert.deepEqual(normalPriceIn({ unit: 'liter' }, st), { perUnit: 50, per: 'liter' }, '€ 4,49 voor 9 liter = € 0,50 per liter');
 });
+
+test('voorstellen voor de volglijst: veel uitgegeven of vaak gekocht, nog niet gevolgd', async () => {
+  const { watchSuggestions } = await import('../js/core/watch.js');
+  const products = new Map([['a', { name: 'Ncc forte lungo rfa' }], ['b', { name: 'Halfvolle melk' }], ['c', { name: 'Edet toiletpapier' }], ['d', { name: 'Eenmalig cadeau' }]]);
+  const f = (productId, date, net, extra = {}) => ({ productId, date, net, gross: net, store: 'lidl', ...extra });
+  const facts = [
+    f('a', '2026-09-01', 1598), f('a', '2026-09-24', 5943), f('a', '2026-10-10', 799),
+    ...['2026-09-02', '2026-09-09', '2026-09-16', '2026-09-23', '2026-10-01'].map((d) => f('b', d, 89, { sizeUnit: 'ml' })),
+    f('c', '2026-09-05', 649), f('c', '2026-10-05', 649),
+    f('d', '2026-10-01', 2500),
+  ];
+  const s = watchSuggestions(facts, products, [DEFAULT_WATCHLIST.find((w) => w.id === 'toiletpapier')], { today: '2026-10-23' });
+  assert.deepEqual(s.map((x) => x.productId), ['a', 'b'], 'toiletpapier wordt al gevolgd; eenmalig niet');
+  assert.equal(s[1].unit, 'liter');
+  assert.deepEqual(watchSuggestions(facts, products, [], { today: '2026-10-23', dismissed: ['a'] }).map((x) => x.productId), ['c', 'b']);
+});

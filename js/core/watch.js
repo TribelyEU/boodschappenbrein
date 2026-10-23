@@ -367,3 +367,37 @@ export function sizeOptionsOf(offer) {
   }
   return out;
 }
+
+/**
+ * Voorstellen voor de volglijst: producten waar jullie veel aan uitgeven of die jullie vaak kopen,
+ * en die nog niet onder een volgproduct vallen.
+ * @returns {{productId, name, spend, times, unit, store}[]}
+ */
+export function watchSuggestions(facts, products, watchlist, { today, months = 6, dismissed = [], limit = 6 } = {}) {
+  const from = new Date(today + 'T12:00:00Z');
+  from.setUTCMonth(from.getUTCMonth() - months);
+  const since = from.toISOString().slice(0, 10);
+  const by = new Map();
+  for (const f of facts || []) {
+    if (!f.productId || !(f.gross > 0) || f.date < since) continue;
+    const c = by.get(f.productId) || { productId: f.productId, spend: 0, days: new Set(), stores: new Map(), weighed: false, sizeUnit: null };
+    c.spend += f.net;
+    c.days.add(f.date);
+    c.stores.set(f.store, (c.stores.get(f.store) || 0) + 1);
+    if (f.weighed) c.weighed = true;
+    if (f.sizeUnit) c.sizeUnit = f.sizeUnit;
+    by.set(f.productId, c);
+  }
+  const out = [];
+  for (const c of by.values()) {
+    const p = products.get(c.productId);
+    if (!p || dismissed.includes(c.productId)) continue;
+    if ((watchlist || []).some((w) => matchesWatch(w, { title: p.name }))) continue;
+    const times = c.days.size;
+    if (times < 2) continue;
+    const unit = c.weighed || c.sizeUnit === 'g' ? 'kilo' : c.sizeUnit === 'ml' ? 'liter' : c.sizeUnit === 'st' ? 'stuk' : 'verpakking';
+    out.push({ productId: c.productId, name: p.name, spend: Math.round(c.spend), times, unit, store: [...c.stores.entries()].sort((a, b) => b[1] - a[1])[0][0] });
+  }
+  // Rangorde: uitgaven, met een duwtje voor vaak gekocht (een product dat je 10× kocht weegt mee, ook als het goedkoop is)
+  return out.sort((a, b) => (b.spend + b.times * 150) - (a.spend + a.times * 150)).slice(0, limit);
+}

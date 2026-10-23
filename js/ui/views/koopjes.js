@@ -6,7 +6,7 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded, watchSuggestions } from '../../core/watch.js';
 import { parseSize, detectBrand, parseOwnSize, sizeText as productSizeText } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
@@ -150,6 +150,24 @@ function section(group) {
   </div>`;
 }
 
+/** Voorstellen: wat jullie veel kopen of waar veel geld naartoe gaat, maar nog niet volgen. */
+function suggestionsBlock() {
+  const d = derived();
+  const list = watchSuggestions(d.facts, state.products, state.settings.watchlist || [], { today: d.today, dismissed: state.settings.watchDismissed || [] });
+  if (!list.length) return '';
+  const unitTxt = (u) => WATCH_UNITS[u].choice.replace(/ \(.*\)$/, '');
+  return html`<div class="card" style="margin-bottom:14px">
+    <div class="quiet-line"><strong>In de gaten houden?</strong><span class="tiny muted">laatste 6 maanden</span></div>
+    <p class="tiny muted" style="margin:2px 0 6px">Hier geven jullie veel aan uit of kopen jullie vaak. Volg je ze, dan zie je elke week alle aanbiedingen ervan.</p>
+    <div class="rows">${list.map((x) => html`<div class="row-item">
+      <div class="grow"><div class="title" style="white-space:normal">${x.name}</div>
+        <div class="sub">${euro(x.spend)} uitgegeven · ${x.times}× gekocht · ${storeName(x.store)}</div></div>
+      <button class="btn small ghost" data-action="dismissSuggestion" data-id="${x.productId}" aria-label="Niet volgen">${icon('x', 16)}</button>
+      <button class="btn small" data-action="followSuggestion" data-id="${x.productId}" data-unit="${x.unit}" title="${unitTxt(x.unit)}">${icon('plus', 14)}Volgen</button>
+    </div>`)}</div>
+  </div>`;
+}
+
 function unrated() {
   const out = [];
   for (const g of derived().koopjes) for (const x of g.offers) if (!x.rating && x.label !== 'duur') out.push({ x, item: g.item });
@@ -176,6 +194,7 @@ export default {
       ${withOffers.map(section)}
       ${without.length ? html`<p class="small muted" style="margin:4px 2px 14px">Deze week niet in de aanbieding: ${without.map((g) => g.item.name).join(', ')}.</p>` : ''}
 
+      ${suggestionsBlock()}
       <button class="btn block" data-action="editList">${icon('settings', 16)}Volglijst aanpassen</button>`;
   },
   actions: {
@@ -200,6 +219,25 @@ export default {
     swipe() { swipeSheet(); },
     editList() { editSheet(); },
     editItem(el) { editSheet(el.dataset.w); },
+    async followSuggestion(el) {
+      const p = state.products.get(el.dataset.id);
+      if (!p) return;
+      const item = newWatchItem(p.name, el.dataset.unit);
+      // Zoekwoord: de eerste twee betekenisvolle woorden ("Ncc forte lungo rfa" → "forte lungo", "Cola zero sugar 6 pack" → "cola zero")
+      const generic = new Set(['ah', 'jumbo', 'lidl', 'dirk', 'plus', 'pack', 'pak', 'stuk', 'stuks', 'zak', 'bak', 'sugar', 'per', 'los', 'ncc']);
+      const words = item.terms[0].split(' ').filter((w) => w.length >= 3 && !/\d/.test(w) && !generic.has(w));
+      if (words.length) item.terms = [words.slice(0, 2).join(' ')];
+      const line = state.lines.find((l) => l.productId === p.id);
+      item.refs = [{ productId: p.id, name: p.name, store: line?.store || null }];
+      const list = state.settings.watchlist || [];
+      if (list.some((w) => w.id === item.id)) item.id = `${item.id}-${Date.now().toString(36)}`;
+      await setSetting('watchlist', [...list, item]);
+      toast(`${p.name} wordt gevolgd. Pas de zoekwoorden aan als het te smal of te breed is.`, { duration: 6000 });
+      editSheet(item.id);
+    },
+    async dismissSuggestion(el) {
+      await setSetting('watchDismissed', [...(state.settings.watchDismissed || []), el.dataset.id]);
+    },
     choose(el) { chooseSheet(el.dataset.key, el.dataset.w); },
   },
 };
