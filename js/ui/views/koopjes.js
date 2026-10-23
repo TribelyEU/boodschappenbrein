@@ -37,117 +37,122 @@ function history(item) {
   return hcache.map.get(item.id);
 }
 
-/** De prijs groot rechts: per eenheid als dat kan, anders per verpakking, anders alleen de actie. */
+const unitShort = (item) => ({ kilo: 'kg', liter: 'l', wasbeurt: 'wasbeurt', rol: 'rol', stuk: 'st', verpakking: 'pak' }[unitKeyOf(item)] || unitLabel(item));
+
+/** Prijs rechts: per eenheid als dat kan, anders per verpakking, anders de actie. */
 function priceBlock(x, item) {
-  if (x.perUnit != null) return html`<div class="num" style="font-weight:750;font-size:18px">${euro(x.perUnit)}</div><div class="tiny muted">per ${unitLabel(item)}</div>`;
-  if (x.packPrice != null) return html`<div class="num" style="font-weight:750;font-size:18px">${euro(x.packPrice)}</div><div class="tiny muted">per stuk/pak</div>`;
-  return html`<div style="font-weight:700">${x.offer.mechanism || ''}</div>`;
+  if (x.perUnit != null) return html`<div class="kp-price num">${euro(x.perUnit)}</div><div class="kp-unit">per ${unitShort(item)}</div>`;
+  if (x.packPrice != null) return html`<div class="kp-price num">${euro(x.packPrice)}</div><div class="kp-unit">per pak</div>`;
+  return html`<div class="kp-mech">${x.offer.mechanism || ''}</div>`;
 }
 
 function details(x) {
   const o = x.offer;
   const parts = [];
-  const sz = x.size ? sizeText(x.size) : o.size && !/^(m\.u\.v|per )/i.test(o.size) ? o.size.split('·')[0].trim() : '';
+  const sz = x.choice?.sizeText || (x.size ? sizeText(x.size) : o.size && !/^(m\.u\.v|per )/i.test(o.size) ? o.size.split('·')[0].trim() : '');
   if (sz) parts.push(sz);
-  if (o.mechanism && x.deal?.type !== 'prijs') parts.push(o.mechanism); // "voor 8,49" staat al groot rechts
-  if (x.eff?.bundle > 1) parts.push(`bij ${x.eff.bundle} stuks`);
+  if (o.mechanism && x.deal?.type !== 'prijs') parts.push(o.mechanism);
   if (o.validTo) parts.push(`t/m ${formatDate(o.validTo, 'short')}`);
   return parts.join(' · ');
 }
 
 /** Afbeelding van de winkel (laadt pas als hij in beeld komt; verdwijnt als hij niet laadt). */
 function thumb(o, size = 56) {
-  if (!o.image) return '';
-  return html`<img src="${o.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:8px;background:#fff;flex:none">`;
+  if (!o.image) return html`<span class="kp-thumb" style="width:${size}px;height:${size}px"></span>`;
+  return html`<img class="kp-thumb" src="${o.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" style="width:${size}px;height:${size}px">`;
 }
 function offerLink(o, label = null) {
   if (!o.url) return '';
   return html`<a href="${o.url}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">${label || `Bekijk bij ${storeName(o.store)}`} ↗</a>`;
 }
 
+/** Referentie: het product van jullie zelf als de aanbieding dat is, anders het goedkoopste wat jullie kopen. */
+function refFor(x, item) {
+  const refs = history(item).refs.filter((r) => r.price?.perUnit != null);
+  if (!refs.length) return null;
+  return refs.find((r) => matchesEntry(r, x.offer)) || [...refs].sort((a, b) => a.price.perUnit - b.price.perUnit)[0];
+}
+
+/** Klein verschil-label onder de prijs: hoeveel goedkoper/duurder per eenheid dan wat jullie normaal kopen. */
+function vsRef(x, item) {
+  if (x.perUnit == null) return '';
+  const ref = refFor(x, item);
+  if (!ref) return '';
+  const diff = ref.price.perUnit - x.perUnit;
+  const tip = `${ref.name}: normaal ${euro(ref.price.perUnit)} per ${unitLabel(item)}`;
+  if (Math.abs(diff) < 1) return html`<span class="kp-diff" title="${tip}">gelijk</span>`;
+  return html`<span class="kp-diff ${diff > 0 ? 'good' : 'warn'}" title="${tip}">${diff > 0 ? '−' : '+'}${euro(Math.abs(diff))}</span>`;
+}
+
 function offerRow(x, item) {
   const o = x.offer;
   const r = x.rating;
-  const facts = [];
-  if (o.was && x.packPrice != null && o.was > x.packPrice) facts.push(`van ${euro(o.was)}`);
-  if (x.perUnit == null && x.discount != null) facts.push(`${pct(x.discount)} korting`);
-  if (x.perUnit == null && !x.size && x.packPrice != null) facts.push('inhoud niet vermeld');
-  return html`<div class="row-item" style="align-items:flex-start;flex-wrap:wrap;gap:10px">
-    ${thumb(o)}
-    <div class="grow" style="min-width:45%">
-      <div class="title" style="white-space:normal">${storeName(o.store)}${x.label === 'koopje' ? html` <span class="chip good">Koopje</span>` : ''}${x.equiv === 'ref' ? html` <span class="chip info">Wat jullie kopen</span>` : x.equiv === 'equiv' ? html` <span class="chip info">Gelijkwaardig</span>` : ''}</div>
-      <div class="small" style="white-space:normal;color:var(--ink-2)">${o.title}</div>
-      <div class="tiny muted" style="white-space:normal;margin-top:2px">${details(x)}${facts.length ? ` · ${facts.join(' · ')}` : ''}</div>
+  const needsChoice = x.perUnit == null && unitOf(item).base && !x.choice;
+  const title = o.url ? html`<a class="kp-title" href="${o.url}" target="_blank" rel="noopener noreferrer">${o.title}</a>` : html`<span class="kp-title">${o.title}</span>`;
+  const pill = x.label === 'koopje' ? html`<span class="kp-pill good">Koopje</span>` : x.equiv === 'ref' ? html`<span class="kp-pill">Jullie product</span>` : '';
+  const was = o.was && x.packPrice != null && o.was > x.packPrice ? html` · <s>${euro(o.was)}</s>` : '';
+  return html`<div class="kp-row${r && !r.interesting ? ' dim' : ''}">
+    ${thumb(o, 48)}
+    <div class="kp-body">
+      <div class="kp-store">${storeName(o.store)}${pill}</div>
+      ${title}
+      <div class="kp-meta">${details(x)}${was}</div>
+      ${needsChoice ? html`<button class="kp-link" data-action="choose" data-key="${x.key}" data-w="${item.id}">Kies variant</button>`
+        : x.choice ? html`<button class="kp-link muted" data-action="choose" data-key="${x.key}" data-w="${item.id}">${x.choice.name || 'Variant'} · wijzig</button>` : ''}
+    </div>
+    <div class="kp-right">
+      ${priceBlock(x, item)}
       ${vsRef(x, item)}
-      ${x.choice ? html`<div class="tiny" style="margin-top:3px">Gekozen: <strong>${x.choice.name || x.choice.sizeText}</strong>${x.choice.normal ? ` (normaal ${euro(x.choice.normal)})` : ''} · <a href="#" data-action="choose" data-key="${x.key}" data-w="${item.id}">wijzig</a></div>`
-        : x.perUnit == null && unitOf(item).base ? html`<button class="btn small ghost" data-action="choose" data-key="${x.key}" data-w="${item.id}" style="padding:2px 0;margin-top:2px">Kies welke je zou nemen</button>` : ''}
-    </div>
-    <div style="text-align:right;min-width:72px">${priceBlock(x, item)}</div>
-    <div style="width:100%;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
-      <span style="margin-right:auto">${offerLink(o)}</span>
-      ${r ? html`
-        <span class="chip ${r.interesting ? 'good' : ''}" style="align-self:center">${r.interesting ? 'Interessant' : 'Niet interessant'}</span>
-        <button class="btn small ghost" data-action="unrate" data-key="${x.key}">Wijzig</button>
-        ${r.interesting ? html`<button class="btn small" data-action="toList" data-key="${x.key}" data-w="${item.id}">${icon('plus', 14)}Op lijst</button>` : ''}`
-      : html`
-        <button class="btn small" data-action="rate" data-key="${x.key}" data-w="${item.id}" data-v="0">Niet interessant</button>
-        <button class="btn small primary" data-action="rate" data-key="${x.key}" data-w="${item.id}" data-v="1">Interessant</button>`}
+      <div class="kp-actions">
+        ${r ? html`
+          <button class="kp-ic on ${r.interesting ? 'yes' : 'no'}" data-action="unrate" data-key="${x.key}" aria-label="Oordeel wissen" title="${r.interesting ? 'Interessant' : 'Niet interessant'} · tik om te wissen">${icon(r.interesting ? 'check' : 'x', 16)}</button>
+          ${r.interesting ? html`<button class="kp-ic" data-action="toList" data-key="${x.key}" data-w="${item.id}" aria-label="Op de lijst" title="Op de lijst">${icon('plus', 16)}</button>` : ''}`
+        : html`
+          <button class="kp-ic" data-action="rate" data-key="${x.key}" data-w="${item.id}" data-v="0" aria-label="Niet interessant" title="Niet interessant">${icon('x', 16)}</button>
+          <button class="kp-ic yes" data-action="rate" data-key="${x.key}" data-w="${item.id}" data-v="1" aria-label="Interessant" title="Interessant">${icon('check', 16)}</button>`}
+      </div>
     </div>
   </div>`;
 }
 
-/** Verschil met de normale prijs van wat jullie nu kopen (beide per dezelfde eenheid, uit de bonnen). */
-function vsRef(x, item) {
-  const refs = history(item).refs.filter((r) => r.price?.perUnit != null);
-  if (!refs.length || x.perUnit == null) return '';
-  // Is de aanbieding één van jullie eigen producten, vergelijk dan met dát product; anders met het goedkoopste ervan.
-  const own = refs.find((r) => matchesEntry(r, x.offer));
-  const ref = own || [...refs].sort((a, b) => a.price.perUnit - b.price.perUnit)[0];
-  const rp = ref.price.perUnit;
-  const diff = rp - x.perUnit;
-  const what = own ? 'wat jullie er normaal voor betalen' : refs.length > 1 ? `${ref.name}, het goedkoopste wat jullie kopen` : 'wat jullie nu kopen';
-  if (Math.abs(diff) < 1) return html`<div class="tiny" style="margin-top:2px">Even duur als ${what}</div>`;
-  return html`<div class="tiny" style="margin-top:2px;font-weight:650;color:${diff > 0 ? 'var(--good)' : 'var(--warn)'}">${euro(Math.abs(diff))} per ${unitLabel(item)} ${diff > 0 ? 'goedkoper' : 'duurder'} dan ${what} (${euro(rp)})</div>`;
-}
-
-/** Wat jullie nu kopen en de gelijkwaardige producten, met hun normale prijs uit de bonnen. */
-function equivBlock(item) {
-  const { refs, equiv } = history(item);
-  if (!refs.length && !equiv.length) return html`<button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="margin:2px 0 4px">${icon('plus', 14)}Kies wat jullie nu kopen</button>`;
-  const src = (e) => (e.productId ? '' : e.source === 'assortiment' ? ' (winkelprijs)' : '');
-  const price = (e) => (e.price?.perUnit != null ? `${euro(e.price.perUnit)} per ${unitLabel(item)}${src(e)}` : e.price?.perPack != null ? `${euro(e.price.perPack)} per verpakking${src(e)}` : e.productId ? 'prijs onbekend' : 'prijs onbekend');
-  return html`<div class="small" style="background:var(--surface-2);border-radius:10px;padding:8px 10px;margin:4px 0 6px">
-    ${refs.length ? html`<div><strong>Jullie kopen:</strong></div>${refs.map((r) => html`<div>${r.name}${r.store ? ` (${storeName(r.store)})` : ''} · ${price(r)}${r.price?.perPack != null && unitOf(item).base ? html` <span style="color:var(--warn)">· inhoud onbekend, vul in bij Wijzig</span>` : ''}</div>`)}` : ''}
-    ${equiv.map((e) => html`<div class="muted">Gelijkwaardig: ${e.name}${e.store ? ` (${storeName(e.store)})` : ''} · ${price(e)}</div>`)}
-    <button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="padding:2px 0;margin-top:2px">Wijzig</button>
-  </div>`;
+/** Eén regel onder de kop: wat jullie normaal betalen (goedkoopste van jullie producten). */
+function refLine(item) {
+  const { refs } = history(item);
+  const priced = refs.filter((r) => r.price?.perUnit != null).sort((a, b) => a.price.perUnit - b.price.perUnit);
+  if (!refs.length) return html`<button class="kp-link muted" data-action="editItem" data-w="${item.id}" style="margin-top:1px">+ Wat kopen jullie nu?</button>`;
+  if (!priced.length) return html`<button class="kp-link warn" data-action="editItem" data-w="${item.id}">Vul de inhoud in van wat jullie kopen</button>`;
+  const r = priced[0];
+  return html`<span class="kp-sub">Normaal ${euro(r.price.perUnit)}/${unitShort(item)} · ${r.name}</span>`;
 }
 
 function footer(item) {
-  const { hist, own } = history(item);
-  const lines = [];
-  if (own) lines.push(`Laatst zelf betaald: ${own.perUnit != null ? `${euro(own.perUnit)} per ${unitLabel(item)}` : `${euro(own.perPack)} per stuk/pak`} (${storeName(own.store)}, ${formatDate(own.date, 'short')}${own.promo ? ', met korting' : ''})`);
-  if (hist?.lowest) lines.push(`Laagste sinds week ${Number(hist.firstWeek.slice(5))}: ${euro(hist.lowest.perUnit)} per ${unitLabel(item)} (${storeName(hist.lowest.store)}, week ${Number(hist.lowest.week.slice(5))})`);
-  for (const r of (hist?.rhythm || []).filter((x) => x.weeks.length >= 2).slice(0, 3)) {
-    lines.push(`${storeName(r.store)}: in de aanbieding in week ${r.weeks.map((w) => Number(w.slice(5))).join(', ')}${r.every ? ` (elke ±${r.every} weken)` : ''}`);
-  }
-  return lines.length ? html`<div class="tiny muted" style="padding:8px 2px 2px;border-top:1px solid var(--line);margin-top:4px">${lines.map((l) => html`<div>${l}</div>`)}</div>` : '';
+  const { hist } = history(item);
+  const parts = [];
+  if (hist?.lowest) parts.push(`Laagste sinds wk ${Number(hist.firstWeek.slice(5))}: ${euro(hist.lowest.perUnit)}/${unitShort(item)} bij ${storeName(hist.lowest.store)}`);
+  const r = (hist?.rhythm || []).find((x) => x.every && x.weeks.length >= 2);
+  if (r) parts.push(`${storeName(r.store)} elke ±${r.every} wk`);
+  return parts.length ? html`<div class="kp-foot">${parts.join(' · ')}</div>` : '';
 }
 
 function section(group) {
   const { item, offers } = group;
   const shown = offers.filter((x) => !(x.label === 'duur' && !x.rating) && x.rating?.interesting !== false);
   const hidden = offers.filter((x) => !shown.includes(x));
-  return html`<div class="card tight" style="margin-bottom:12px">
-    <div class="between" style="padding:6px 2px 2px;align-items:flex-start"><div><strong>${item.name}</strong><div class="tiny muted">prijs ${unitOf(item).choice.replace(/ \(.*\)$/, '')}${item.onlyEquiv && hasEquivalents(item) ? ' · alleen gelijkwaardige' : ''}</div></div><span class="small muted">${offers.length} aanbieding${offers.length === 1 ? '' : 'en'}</span></div>
-    ${equivBlock(item)}
-    ${shown.length ? html`<div class="rows">${shown.slice(0, 3).map((x) => offerRow(x, item))}</div>` : ''}
-    ${shown.length > 3 ? html`<details style="margin:4px 2px"><summary class="small" style="color:var(--accent);font-weight:600">Nog ${shown.length - 3} aanbieding${shown.length - 3 === 1 ? '' : 'en'}</summary>
-      <div class="rows">${shown.slice(3).map((x) => offerRow(x, item))}</div></details>` : ''}
-    ${hidden.length ? html`<details style="margin:4px 2px"><summary class="small muted">${hidden.length} niet interessant${hidden.some((x) => !x.rating) ? ' (duurder dan wat jullie eerder afwezen)' : ''}</summary>
-      <div class="rows">${hidden.map((x) => offerRow(x, item))}</div></details>` : ''}
+  const best = shown.map((x) => x.perUnit).filter((v) => v != null).sort((a, b) => a - b)[0];
+  return html`<section class="kp-card">
+    <header class="kp-head">
+      <div style="flex:1;min-width:0">
+        <div class="kp-name">${item.name}</div>
+        ${refLine(item)}
+      </div>
+      ${best != null ? html`<div class="kp-best"><span class="tiny muted">vanaf</span> <strong class="num">${euro(best)}</strong><span class="tiny muted">/${unitShort(item)}</span></div>` : ''}
+      <button class="kp-ic plain" data-action="editItem" data-w="${item.id}" aria-label="Instellingen ${item.name}">${icon('settings', 16)}</button>
+    </header>
+    ${shown.slice(0, 3).map((x) => offerRow(x, item))}
+    ${shown.length > 3 ? html`<details class="kp-more"><summary>Nog ${shown.length - 3}</summary>${shown.slice(3).map((x) => offerRow(x, item))}</details>` : ''}
+    ${hidden.length ? html`<details class="kp-more"><summary class="muted">${hidden.length} verborgen</summary>${hidden.map((x) => offerRow(x, item))}</details>` : ''}
     ${footer(item)}
-  </div>`;
+  </section>`;
 }
 
 /** Voorstellen: wat jullie veel kopen of waar veel geld naartoe gaat, maar nog niet volgen. */
@@ -156,16 +161,17 @@ function suggestionsBlock() {
   const list = watchSuggestions(d.facts, state.products, state.settings.watchlist || [], { today: d.today, dismissed: state.settings.watchDismissed || [] });
   if (!list.length) return '';
   const unitTxt = (u) => WATCH_UNITS[u].choice.replace(/ \(.*\)$/, '');
-  return html`<div class="card" style="margin-bottom:14px">
-    <div class="quiet-line"><strong>In de gaten houden?</strong><span class="tiny muted">laatste 6 maanden</span></div>
-    <p class="tiny muted" style="margin:2px 0 6px">Hier geven jullie veel aan uit of kopen jullie vaak. Volg je ze, dan zie je elke week alle aanbiedingen ervan.</p>
-    <div class="rows">${list.map((x) => html`<div class="row-item">
-      <div class="grow"><div class="title" style="white-space:normal">${x.name}</div>
-        <div class="sub">${euro(x.spend)} uitgegeven · ${x.times}× gekocht · ${storeName(x.store)}</div></div>
-      <button class="btn small ghost" data-action="dismissSuggestion" data-id="${x.productId}" aria-label="Niet volgen">${icon('x', 16)}</button>
-      <button class="btn small" data-action="followSuggestion" data-id="${x.productId}" data-unit="${x.unit}" title="${unitTxt(x.unit)}">${icon('plus', 14)}Volgen</button>
-    </div>`)}</div>
-  </div>`;
+  return html`<section class="kp-card">
+    <header class="kp-head"><div style="flex:1;min-width:0"><div class="kp-name">Ook volgen?</div><span class="kp-sub">Veel gekocht, laatste 6 maanden</span></div></header>
+    ${list.map((x) => html`<div class="kp-row">
+      <div class="kp-body"><div class="kp-title" style="font-weight:600;color:var(--ink)">${x.name}</div>
+        <div class="kp-meta">${euro(x.spend)} · ${x.times}× · ${storeName(x.store)}</div></div>
+      <div class="kp-actions">
+        <button class="kp-ic" data-action="dismissSuggestion" data-id="${x.productId}" aria-label="Niet volgen" title="Niet volgen">${icon('x', 16)}</button>
+        <button class="kp-ic yes" data-action="followSuggestion" data-id="${x.productId}" data-unit="${x.unit}" aria-label="Volgen" title="Volgen (${unitTxt(x.unit)})">${icon('plus', 16)}</button>
+      </div>
+    </div>`)}
+  </section>`;
 }
 
 function unrated() {
@@ -189,10 +195,10 @@ export default {
         <button class="btn small ghost" data-action="refresh" ${busy ? 'disabled' : ''}>${busy ? html`<span class="spinner"></span>` : 'Vernieuwen'}</button></div>
 
       ${todo.length ? html`<button class="big-action" data-action="swipe" style="margin-bottom:16px;width:100%;text-align:left">
-        <span class="ic">${icon('tag', 22)}</span><span>${todo.length} nieuwe aanbieding${todo.length === 1 ? '' : 'en'} beoordelen<small>Interessant of niet? Daar leert de app van.</small></span></button>` : ''}
+        <span class="ic">${icon('tag', 22)}</span><span>${todo.length} nieuwe aanbieding${todo.length === 1 ? '' : 'en'}<small>Snel beoordelen</small></span></button>` : ''}
 
       ${withOffers.map(section)}
-      ${without.length ? html`<p class="small muted" style="margin:4px 2px 14px">Deze week niet in de aanbieding: ${without.map((g) => g.item.name).join(', ')}.</p>` : ''}
+      ${without.length ? html`<p class="tiny muted" style="margin:2px 4px 16px">Geen aanbieding: ${without.map((g) => g.item.name).join(', ')}</p>` : ''}
 
       ${suggestionsBlock()}
       <button class="btn block" data-action="editList">${icon('settings', 16)}Volglijst aanpassen</button>`;
