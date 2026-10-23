@@ -55,9 +55,12 @@ async function processFile(file, entry, ctx) {
   if (entry.kind === 'pdf' || entry.kind === 'image' || entry.kind === 'text') {
     const { text, method } = entry.kind === 'pdf' ? await extractPdf(file, progress) : entry.kind === 'image' ? await extractImage(file, progress) : { text: await file.text(), method: 'tekst' };
     const p = parseReceiptText(text, { today, fileName: file.name });
+    const extra = p.extra || [];
+    delete p.extra;
     addProposal(p, { fileName: file.name, sourceType: method, fileId: entry.id });
+    for (const x of extra) addProposal(x, { fileName: `${file.name} (retourbon)`, sourceType: method, fileId: entry.id });
     entry.status = 'klaar';
-    entry.message = `${p.lines.length} regels herkend (${method === 'ocr' || method === 'pdf-ocr' ? 'tekstherkenning — controleer extra goed' : 'tekst uit bestand'})`;
+    entry.message = `${extra.length ? `${extra.length + 1} bonnen, ` : ''}${p.lines.length} regels herkend (${method === 'ocr' || method === 'pdf-ocr' ? 'tekstherkenning — controleer extra goed' : 'tekst uit bestand'})`;
   } else if (entry.kind === 'csv' || entry.kind === 'excel') {
     const { rows } = await extractTable(file);
     setupTable(rows, file.name, entry);
@@ -186,7 +189,7 @@ function lineRow(p, l, i, mem) {
           <select class="input" data-change="lineCat" data-p="${p._id}" data-i="${i}">${CATEGORIES.map((c) => html`<option value="${c.id}" ${c.id === (l.category || guessCategory(l.rawName + ' ' + displayName(l.rawName)).id) ? 'selected' : ''}>${c.name}</option>`)}</select>`) : ''}
       ${l.kind === 'discount' ? html`<select class="input" data-change="lineLink" data-p="${p._id}" data-i="${i}"><option value="">Niet gekoppeld</option>${p.lines.map((x, j) => x.kind === 'product' ? html`<option value="${j}" ${l.linkedTo === j ? 'selected' : ''}>bij: ${x.rawName}</option>` : '')}</select>` : ''}
       ${l.weighed ? html`<span class="chip">gewogen (kg)</span>` : ''}
-      ${low ? html`<span class="chip warn">controleer</span>` : ''}
+      ${l.repaired ? html`<span class="chip warn" title="Tekstherkenning las ${euro(l.repairedFrom?.what === 'stukprijs' ? l.repairedFrom.unitPrice : l.repairedFrom?.amount)}; aangepast zodat de bon klopt">hersteld · las ${euro(l.repairedFrom?.what === 'stukprijs' ? l.repairedFrom.unitPrice : l.repairedFrom?.amount)}</span>` : low ? html`<span class="chip warn">controleer</span>` : ''}
     </div>
   </div>`;
 }

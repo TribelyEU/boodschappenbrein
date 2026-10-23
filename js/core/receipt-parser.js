@@ -18,6 +18,7 @@ import { detectStore } from './stores.js';
 import { abbreviationScore, compact, normalizeText } from './text.js';
 import { parseSize } from './products.js';
 import { isAhInvoice, parseAhInvoice } from './ah-invoice.js';
+import { isLidlReceipt, parseLidlReceipt } from './lidl-receipt.js';
 
 const AMT = '(-?\\s?\\d{1,4}[,.]\\d{2}-?)';
 const VAT = '(?:\\s+[A-D]|\\s+\\d{1,2}%)?'; // btw-code achter het bedrag
@@ -68,6 +69,7 @@ export function parseReceiptText(text, opts = {}) {
   const rawText = String(text || '').replace(/\r/g, '');
   const lines = rawText.split('\n').map((l) => l.replace(/\t/g, ' ').replace(/\s+$/, '')).filter((l) => l.trim());
   if (isAhInvoice(rawText)) return parseAhInvoice(rawText, opts);
+  if (isLidlReceipt(rawText)) return parseLidlReceipt(rawText, opts);
   const result = {
     store: detectStore(rawText) || storeFromHints(rawText, opts.fileName),
     date: findDate(rawText, opts.today || null),

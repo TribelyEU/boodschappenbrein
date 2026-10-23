@@ -3,3 +3,4 @@ tests/fixtures/ah-*.txt
 node_modules/
 .DS_Store
 tests/fixtures/stores/
+tests/fixtures/lidl-*.txt

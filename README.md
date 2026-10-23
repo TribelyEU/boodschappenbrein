@@ -40,6 +40,7 @@ node --test tests/*.test.js     # 58 tests: parser, dubbele imports, analyse, vo
 |---|---|
 | Importeren van bonnen als **tekst-PDF**, **schermafbeelding/foto** (OCR), **CSV**, **Excel**, **JSON**, geplakte tekst | Werkt. Meerdere bestanden tegelijk. |
 | Herkenning van winkel, datum, aantal, gewicht, inhoud, prijs, korting, statiegeld, retour, totaal | Werkt voor gangbare bonvormen (AH, Jumbo, Lidl en vergelijkbaar). Elke bon gaat langs een controlescherm met totaalcontrole. |
+| Lidl-bonnen uit de Lidl Plus-app (schermafbeelding) | Eigen lezer (`js/core/lidl-receipt.js`): kortingen ("In prijs verlaagd", "Lidl Plus korting", "KORTING 25%") aan het artikel erboven, statiegeld, gewicht, retourbon in hetzelfde beeld als aparte bon. OCR-cijferfouten (0 ↔ 6/8/9, @) worden hersteld als aantal × prijs, de btw-tabel en het bontotaal (Totaal, Bankpas, kaartbetaling) samen precies één oplossing geven; herstelde bedragen worden gemarkeerd. Getest op 9 echte bonnen in twee OCR-varianten. Een bon die over meerdere schermafbeeldingen verdeeld is, wordt nog niet samengevoegd. |
 | Dubbele imports | Geblokkeerd op bestand (SHA-256) én op bon (winkel/datum/bedrag/regels). |
 | Import terugdraaien, bon verwijderen | Werkt, inclusief opruimen van producten die alleen door die import bestonden. |
 | Productgeheugen (afkortingen, merken, inhoud), leren van correcties, samenvoegen | Werkt. |
