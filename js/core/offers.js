@@ -39,7 +39,7 @@ export function parseMechanism(text, { price = null, was = null } = {}) {
   return null;
 }
 
-const OFFER_STOP = new Set(['ah', 'alle', 'keuze', 'uit', 'het', 'hele', 'assortiment', 'diverse', 'soorten', 'varianten', 'combineren', 'mix', 'match', 'nieuw', 'combi']);
+const OFFER_STOP = new Set(['ah', 'alle', 'keuze', 'uit', 'het', 'hele', 'assortiment', 'diverse', 'soorten', 'varianten', 'combineren', 'mix', 'match', 'nieuw', 'combi', 'jumbo', 'dirk', 'hoogvliet', 'lidl', 'action', 'kruidvat', 'wibra']);
 
 export function offerTokens(offer) {
   const base = productTokens(offer.title).filter((t) => !OFFER_STOP.has(t));
@@ -68,11 +68,25 @@ function covers(token, list) {
 // product, dan is het een ander product (vochtig toiletpapier ≠ toiletpapier, gemarineerde kipfilet ≠ kipfilet).
 const QUALIFIERS = ['vochtig', 'gemarineerd', 'marinade', 'gerookt', 'gepaneerd', 'gegrild', 'gekruid', 'mini', 'light', 'zero', 'lactosevrij',
   'glutenvrij', 'vegan', 'vegetarisch', 'plantaardig', 'kids', 'baby', 'drink', 'shake', 'reep', 'repen', 'koek', 'chips', 'saus', 'soep',
-  'smoothie', 'ijs', 'poeder', 'capsule', 'pads', 'bonen', 'gemalen', 'oploskoffie', 'decafe', 'cafeinevrij', 'biologisch', 'bio'];
+  'smoothie', 'ijs', 'poeder', 'capsule', 'pads', 'bonen', 'gemalen', 'oploskoffie', 'decafe', 'cafeinevrij', 'biologisch', 'bio', 'zoete', 'zoet'];
 
 function qualifiersIn(text) {
   const n = ' ' + normalizeText(text) + ' ';
   return QUALIFIERS.filter((q) => n.includes(' ' + q) || (q.length >= 6 && n.includes(q)));
+}
+
+/** Hoofdwoorden van een aanbieding: eerste en laatste woord van elk alternatief ("A, B of C"). */
+function headOf(offer) {
+  if (offer._heads) return offer._heads;
+  const alts = String(offer.title || '').split(/\s+of\s+|,|\s+&\s+|\s+en\s+|\//i);
+  const heads = [];
+  for (const a of alts) {
+    const t = productTokens(a).filter((x) => !OFFER_STOP.has(x));
+    if (!t.length) continue;
+    heads.push(t[t.length - 1]);
+    if (t.length <= 2) heads.push(t[0]);
+  }
+  return (offer._heads = heads);
 }
 
 export function matchOffer(offer, products, brandOf = new Map()) {
@@ -85,6 +99,9 @@ export function matchOffer(offer, products, brandOf = new Map()) {
     const kt = p.key.split(' ').filter(Boolean);
     if (!kt.length || (kt.length === 1 && kt[0].length < 4)) continue;
     if (!kt.every((t) => covers(t, ot))) continue;
+    // Eén woord ("spinazie", "cola") moet het hoofdwoord zijn, niet een smaakje: "Gewassen spinazie" wel,
+    // "Borek stick spinazie feta" en "Katja alpaca cola"-snoep niet.
+    if (kt.length === 1 && !headOf(offer).some((h) => covers(kt[0], [h]))) continue;
     if (offerQuals.length) {
       const mine = qualifiersIn(`${p.name} ${p.key}`);
       if (offerQuals.some((q) => !mine.includes(q))) continue;
@@ -163,18 +180,42 @@ export function adviseOffer(offer, match, ctx) {
 }
 
 /**
+ * Bij een andere winkel dan waar jullie het kopen is een vage naam ("Maaltijd", "Cola") te weinig:
+ * dan vergelijk je een AH-maaltijdbox van € 6,99 met een Jumbo-magnetronmaaltijd. Daar is óf een
+ * specifiekere naam nodig (minstens twee woorden), óf hetzelfde merk.
+ */
+function crossStoreOk(offer, match, products, storesOf) {
+  const bought = storesOf.get(match.productId);
+  if (!bought || bought.has(offer.store)) return true;
+  const p = products.get(match.productId);
+  const words = (p?.key || '').split(' ').filter(Boolean);
+  if (words.length >= 2 || match.brandMatch === true) return true;
+  // Eén woord: alleen bij een korte, duidelijke titel ("Verse zalmfilet", "Sable druiven").
+  return offerTokens(offer).length <= 2;
+}
+
+/**
  * Het weekoverzicht: alle relevante aanbiedingen in jullie winkels, per winkel gegroepeerd.
  * @returns {{ items: object[], byStore: Map<string, object[]>, total: number, considered: number }}
  */
 export function weeklyAdvice(data, ctx, { stores = null, limitPerStore = 12 } = {}) {
-  const offers = (data?.offers || []).filter((o) => (!stores || stores.includes(o.store)) && (!o.validTo || o.validTo >= ctx.today));
+  const offers = (data?.offers || []).filter((o) => (!stores || stores.includes(o.store)) && (!o.validTo || o.validTo >= ctx.today) && (!o.validFrom || o.validFrom <= ctx.today));
   const brandOf = brandsByProduct(ctx.lines);
+  const storesOf = new Map();
+  for (const f of ctx.facts || []) {
+    if (!f.productId) continue;
+    if (!storesOf.has(f.productId)) storesOf.set(f.productId, new Set());
+    storesOf.get(f.productId).add(f.store);
+  }
   const best = new Map(); // productId|store → beste advies
   for (const o of offers) {
-    for (const m of matchOffer(o, ctx.products, brandOf).slice(0, 2)) {
+    for (const m of matchOffer(o, ctx.products, brandOf).filter((m) => crossStoreOk(o, m, ctx.products, storesOf)).slice(0, 2)) {
       let a;
       try { a = adviseOffer(o, m, ctx); } catch { a = null; }
       if (!a || a.verdict === 'niet' || a.verdict === 'onbekend' || !(a.saving > 0)) continue;
+      // Meer dan de helft goedkoper dan wat jullie normaal betalen, in een andere winkel? Dan is het
+      // vrijwel zeker een ander (kleiner of eenvoudiger) product: niet tonen.
+      if (a.kind === 'vast' && a.discountVsYou > 0.5 && !storesOf.get(a.productId)?.has(o.store)) continue;
       const k = `${a.productId}|${o.store}`;
       if (!best.has(k) || best.get(k).saving < a.saving) best.set(k, a);
     }

@@ -8,11 +8,17 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fetchAh, fetchFolderz } from './offer-sources.mjs';
+import { fetchStore, PARSERS } from './store-sources.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-// Standaard alleen AH. Folderz blokkeert automatische toegang (AWS-WAF-controle, okt. 2026); die blokkade omzeilen we niet.
-// Andere winkels kunnen later worden toegevoegd zodra er een bron is die automatische toegang toestaat.
-const STORES = (process.env.STORES || 'ah').split(',').map((s) => s.trim()).filter(Boolean);
+// AH via de AH-app-API; Jumbo, Dirk, Hoogvliet, Action en Lidl via hun eigen aanbiedingenpagina (één pagina per dag).
+// Niet automatisch: Kruidvat weigert automatische toegang (403, okt. 2026) en Wibra heeft geen bruikbare pagina.
+// Folderz blokkeert automatische toegang (AWS-WAF-controle); die blokkade omzeilen we niet.
+const STORES = (process.env.STORES || 'ah,jumbo,dirk,hoogvliet,lidl,action').split(',').map((s) => s.trim()).filter(Boolean);
+const MANUAL = {
+  kruidvat: 'Kruidvat weigert automatische toegang tot de website; dat omzeilen we niet.',
+  wibra: 'Wibra heeft geen aanbiedingenpagina die automatisch te lezen is.',
+};
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' }); // JJJJ-MM-DD
 const keepHtml = process.env.DEBUG_HTML === '1';
 const log = (...a) => console.log(...a);
@@ -23,6 +29,8 @@ async function main() {
   const sources = {};
   const offers = [];
   await mkdir(join(root, 'data', 'debug'), { recursive: true });
+  let previous = null;
+  try { previous = JSON.parse(await readFile(join(root, 'data', 'aanbiedingen.json'), 'utf8')); } catch { /* geen vorig bestand */ }
 
   for (const store of STORES) {
     const started = Date.now();
@@ -39,6 +47,14 @@ async function main() {
           sources.ah = { ok: res.offers.length > 0, via: 'folderz', count: res.offers.length, method: res.method, note: `AH-API: ${e.message}` };
           if (res.html) await writeFile(join(root, 'data', 'debug', 'ah.html'), res.html.slice(0, 600000));
         }
+      } else if (PARSERS[store]) {
+        const res = await fetchStore(fetch, store, { log });
+        if (!res.offers.length) {
+          await writeFile(join(root, 'data', 'debug', `${store}.html`), res.html.slice(0, 3000000));
+          throw new Error('0 aanbiedingen gevonden; de website is waarschijnlijk veranderd');
+        }
+        offers.push(...res.offers);
+        sources[store] = { ok: true, via: 'website', count: res.offers.length };
       } else {
         const res = await fetchFolderz(fetch, store, { today, log, keepHtml });
         offers.push(...res.offers);
@@ -46,12 +62,17 @@ async function main() {
         if (res.html) await writeFile(join(root, 'data', 'debug', `${store}.html`), res.html.slice(0, 600000));
       }
     } catch (e) {
-      sources[store] = { ok: false, error: e.message };
-      log(`${store}: MISLUKT – ${e.message}`);
+      // Vorige, nog geldige aanbiedingen van deze winkel bewaren, zodat één mislukte dag niets wegneemt.
+      const kept = (previous?.offers || []).filter((o) => o.store === store && o.validTo && o.validTo >= today);
+      offers.push(...kept);
+      sources[store] = { ok: false, error: e.message, kept: kept.length, count: kept.length };
+      log(`${store}: MISLUKT – ${e.message}${kept.length ? ` (${kept.length} eerdere aanbiedingen bewaard)` : ''}`);
     }
     sources[store].ms = Date.now() - started;
     await pause(1500); // vriendelijk tempo
   }
+
+  for (const [store, note] of Object.entries(MANUAL)) if (!sources[store]) sources[store] = { ok: false, manual: true, error: note };
 
   // Valt alles uit, overschrijf dan niet de vorige (bruikbare) gegevens.
   const total = offers.length;

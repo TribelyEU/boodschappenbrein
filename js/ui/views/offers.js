@@ -1,7 +1,7 @@
-// Prijzen → Aanbiedingen: de folders van deze week, vergeleken met jullie eigen aankopen.
+// Aanbiedingen: de acties van deze week in jullie winkels, vergeleken met jullie eigen aankopen.
 
 import { state, derived, refreshOffers, addToList } from '../../data/store.js';
-import { html, icon, toast } from '../dom.js';
+import { html, icon, toast, esc } from '../dom.js';
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
@@ -44,24 +44,36 @@ function searchResults() {
     </div>`)}</div>` : html`<p class="muted" style="padding:6px">Niets gevonden voor “${query}”.</p>`}</div>`;
 }
 
-/** Korte statusregel: van wanneer de Bonus is, en vernieuwen. Details per winkel achter het i-knopje. */
+const STORE_ORDER = ['ah', 'lidl', 'jumbo', 'dirk', 'hoogvliet', 'action', 'kruidvat', 'wibra'];
+
+/** Korte statusregel: hoeveel acties uit hoeveel winkels, en vernieuwen. Details per winkel achter het i-knopje. */
 function statusLine() {
   const d = derived();
   const rec = state.offers;
   const st = d.offerStatus;
-  const ah = st.ok ? st.sources?.ah : null;
+  const okStores = st.ok ? Object.values(st.sources || {}).filter((v) => v.ok).length : 0;
+  const failed = st.ok ? Object.entries(st.sources || {}).filter(([, v]) => !v.ok && !v.manual).map(([k]) => storeName(k)) : [];
   const text = !st.ok ? (rec?.error ? `Ophalen lukte niet: ${rec.error}` : st.reason || 'Nog geen aanbiedingen.')
-    : ah?.period ? `AH-Bonus ${formatDate(ah.period.start, 'short')} t/m ${formatDate(ah.period.end, 'short')} · ${st.count} acties`
-      : `Bijgewerkt ${formatDate(localDateOf(st.generatedAt), 'short')} · ${st.count} acties`;
+    : `${st.count} acties uit ${okStores} winkel${okStores === 1 ? '' : 's'} · ${formatDate(localDateOf(st.generatedAt), 'short')}`;
   return html`<div class="between small" style="color:var(--muted);margin:-2px 2px 10px">
-    <span>${st.ok && st.stale ? html`<span style="color:var(--warn)">${text} (${st.age} dagen oud)</span>` : text}</span>
+    <span>${st.ok && st.stale ? html`<span style="color:var(--warn)">${text} (${st.age} dagen oud)</span>` : text}${failed.length ? html`<br><span style="color:var(--warn)">Niet gelukt: ${failed.join(', ')}</span>` : ''}</span>
     <button class="btn small ghost" data-action="refreshOffers" ${busy ? 'disabled' : ''}>${busy ? html`<span class="spinner"></span>` : 'Vernieuwen'}</button>
   </div>`;
 }
 
-const OFFERS_INFO = `<p>Elke ochtend haalt een klein script op GitHub de Bonus-aanbiedingen van Albert Heijn op. Jullie aankopen gaan daar nooit naartoe: de vergelijking gebeurt op deze telefoon.</p>
-<p>Je ziet alleen acties die voor jullie echt goedkoper zijn dan wat jullie normaal betalen. Het bedrag is de besparing voor de voorgestelde hoeveelheid.</p>
-<p>Voor Lidl, Kruidvat en andere winkels is er geen bron die automatisch ophalen toestaat. Zie je daar iets goeds, tik dan bij een inslagproduct op <strong>Aanbieding beoordelen</strong>.</p>`;
+function offersInfo() {
+  const sources = derived().offerStatus?.sources || {};
+  const rows = STORE_ORDER.filter((id) => sources[id] || ['kruidvat', 'wibra'].includes(id)).map((id) => {
+    const v = sources[id] || { manual: true, error: 'Nog geen automatische bron.' };
+    const what = v.ok ? `${v.count} acties${id === 'ah' && v.period ? ` (Bonus ${formatDate(v.period.start, 'short')} t/m ${formatDate(v.period.end, 'short')})` : ''}`
+      : v.manual ? `handmatig: ${esc(v.error)}` : `vandaag niet gelukt (${esc(v.error || '')})${v.kept ? `; ${v.kept} acties van eerder bewaard` : ''}`;
+    return `<li><strong>${storeName(id)}</strong>: ${what}</li>`;
+  }).join('');
+  return `<p>Elke ochtend haalt een klein script op GitHub de aanbiedingen op: van AH via de AH-app, van Lidl, Jumbo, Dirk, Hoogvliet en Action van hun eigen aanbiedingenpagina. Jullie aankopen gaan daar nooit naartoe: de vergelijking gebeurt op deze telefoon.</p>
+<ul style="padding-left:18px;margin:8px 0">${rows}</ul>
+<p>Je ziet alleen acties die voor jullie echt goedkoper zijn dan wat jullie normaal betalen. Het bedrag is de besparing voor de voorgestelde hoeveelheid. Lidl-prijzen met "Lidl Plus" gelden met de Lidl Plus-app.</p>
+<p>Zie je bij Kruidvat, Wibra of ergens anders iets goeds? Tik bij een inslagproduct op het <strong>labeltje</strong> om de aanbieding te beoordelen.</p>`;
+}
 
 /** Sectie "Deze week in de Bonus" voor het Aanbiedingen-scherm (of een korte versie voor Vandaag). */
 export function offersSection({ compact = false } = {}) {
@@ -81,7 +93,7 @@ export function offersSection({ compact = false } = {}) {
     </div>`;
   }
   return html`
-    ${sectionHead('Deze week voor jullie', { infoTitle: 'Over de aanbiedingen', infoBody: OFFERS_INFO })}
+    ${sectionHead('Deze week voor jullie', { infoTitle: 'Over de aanbiedingen', infoBody: offersInfo() })}
     ${statusLine()}
     ${items.length ? html`
       ${[...w.byStore.entries()].map(([store, list]) => html`

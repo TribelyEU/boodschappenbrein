@@ -124,7 +124,7 @@ precies één Bonus-artikel zonder korting over is (`ALLEKNORR` → `GOODNOODLES
 Verbeterd in het voorraadmodel: de voorraad wordt nu opgebouwd vanaf de laatste 5 aankopen in plaats van vanaf de eerste bon.
 Zo kunnen kleine afwijkingen in het tempo zich niet maandenlang opstapelen; het verbruikstempo wordt nog steeds uit de hele historie geleerd.
 
-## Wekelijkse aanbiedingen (Prijzen → Aanbiedingen)
+## Wekelijkse aanbiedingen (tabblad Aanbiedingen)
 
 **Installatie op GitHub: zie LEESMIJ.md** (stap voor stap, ook voor beginners).
 
@@ -132,9 +132,14 @@ Zo kunnen kleine afwijkingen in het tempo zich niet maandenlang opstapelen; het 
   - **Albert Heijn:** onofficiële app-API met anoniem token (`/mobile-auth/v1/auth/token/anonymous`,
     `/mobile-services/bonuspage/v3/metadata`, `/mobile-services/bonuspage/v2/section`), zoals in github.com/gwillem/appie-go.
     Alleen landelijke Bonus, geen persoonlijke Bonus Box.
-  - **Andere winkels:** de Folderz-ondersteuning zit in de code (`STORES=lidl,…`), maar staat **uit**. Bij de eerste
-    echte run (23 okt 2026) bleek Folderz automatische toegang te blokkeren met een AWS-WAF-controle. Die blokkade wordt
-    bewust niet omzeild. Herkent het script zo'n controle, dan meldt het dat en stopt het voor die winkel.
+  - **Lidl, Jumbo, Dirk, Hoogvliet, Action** (`scripts/store-sources.mjs`): per winkel één openbare aanbiedingenpagina per
+    dag. De gegevens staan al als JSON in die pagina (Nuxt `__NUXT_DATA__` bij Jumbo en Dirk, `__NEXT_DATA__` bij
+    Hoogvliet, RSC-gegevens bij Action, `data-grid-data` bij Lidl). robots.txt wordt eerst gecontroleerd. Alleen-online-acties,
+    "vast laag"-prijzen en gratis-bezorgacties worden overgeslagen. Lidl Plus-prijzen staan erbij met die vermelding.
+  - **Kruidvat** geeft een 403 (Akamai) en **Folderz** een AWS-WAF-controle: die blokkades worden bewust niet omzeild.
+    **Wibra** heeft geen bruikbare pagina. Voor deze winkels is er de handmatige "Aanbieding beoordelen".
+  - Mislukt één winkel, dan blijven de nog geldige aanbiedingen van de vorige run van die winkel staan.
+  - Diagnose: "Run workflow" met *debug* aan bewaart de opgehaalde pagina's in `data/debug/`.
   - Mislukt alles, dan blijft het vorige bestand staan en faalt de run, zodat GitHub een e-mail stuurt.
 - `.github/workflows/aanbiedingen.yml` draait dagelijks om ±06:20, bij elke push en handmatig. Het publiceert de app
   op GitHub Pages; aanbiedingen en app staan dan op hetzelfde adres.

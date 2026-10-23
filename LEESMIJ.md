@@ -4,9 +4,9 @@ Met deze stappen gebeuren er twee dingen tegelijk:
 
 1. **De app krijgt een eigen webadres** (`https://JOUWNAAM.github.io/boodschappenbrein/`), dat je op je iPhone en
    computer opent en op het beginscherm zet. Geen computer meer nodig die aan moet staan.
-2. **Elke ochtend worden de Bonus-aanbiedingen van Albert Heijn opgehaald** en in de app getoond onder
-   het tabblad **Aanbiedingen**, vergeleken met wat jullie zelf normaal betalen. (Voor andere winkels is er nog geen bron
-   die automatische toegang toestaat.)
+2. **Elke ochtend worden de aanbiedingen opgehaald** van Albert Heijn, Lidl, Jumbo, Dirk, Hoogvliet en Action, en in de
+   app getoond onder het tabblad **Aanbiedingen**, vergeleken met wat jullie zelf normaal betalen. (Kruidvat weigert
+   automatische toegang en Wibra heeft geen bruikbare pagina; die beoordeel je met de hand.)
 
 Alles is gratis. Reken op ±15 minuten.
 
