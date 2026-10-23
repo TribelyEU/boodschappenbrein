@@ -11,6 +11,10 @@ on:
         description: 'Opgehaalde pagina’s bewaren voor diagnose (data/debug)'
         type: boolean
         default: false
+      recepten:
+        description: 'Aantal receptpagina’s om op te halen (normaal 30)'
+        type: number
+        default: 30
   push:
     branches: [main]
     paths-ignore: ['data/**']
@@ -47,10 +51,16 @@ jobs:
           DEBUG_HTML: ${{ github.event_name == 'workflow_dispatch' && inputs.debug && '1' || '' }}
         run: node scripts/fetch-offers.mjs
 
+      - name: Recepten ophalen (Lekker en Simpel)
+        continue-on-error: true
+        env:
+          RECIPE_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.recepten || 30 }}
+        run: node scripts/fetch-recipes.mjs
+
       - name: Winkelpagina's bewaren voor diagnose
         if: github.event_name == 'workflow_dispatch' && inputs.debug
         continue-on-error: true
-        run: node scripts/probe-recipes.mjs; node scripts/probe-stores.mjs && node scripts/probe-images.mjs
+        run: node scripts/probe-stores.mjs && node scripts/probe-images.mjs
 
       - name: Opslaan in de repository
         run: |

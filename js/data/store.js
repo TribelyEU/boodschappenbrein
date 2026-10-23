@@ -114,6 +114,25 @@ export async function loadAssortment({ force = false } = {}) {
   }
 }
 
+/** Recepten van Lekker en Simpel (data/recepten.json naast de app); een dag bewaard op het toestel. */
+export async function loadRecipes({ force = false } = {}) {
+  let rec = null;
+  try { rec = await db.get('market', 'recipes'); } catch { rec = null; }
+  if (rec?.recipes && !force && Date.now() - Date.parse(rec.fetchedAt) < 864e5) return rec;
+  const base = state.settings.offersUrl ? state.settings.offersUrl.replace(/aanbiedingen\.json(\?.*)?$/, '') : new URL('data/', location.href).href;
+  try {
+    const r = await fetch(new URL('recepten.json', base).href, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`server antwoordde ${r.status}`);
+    const j = await r.json();
+    rec = { id: 'recipes', recipes: j.recipes || [], fetchedAt: new Date().toISOString() };
+    await db.put('market', rec);
+    return rec;
+  } catch (e) {
+    if (rec?.recipes) return { ...rec, stale: true };
+    throw new Error(`Recepten ophalen lukte niet: ${e.message}`);
+  }
+}
+
 /** Bewaarde aanbiedingen van eerdere weken (data/historie.json naast de app). Mislukt dit, dan werkt alles gewoon zonder. */
 export async function refreshHistory() {
   const base = state.settings.offersUrl ? state.settings.offersUrl.replace(/aanbiedingen\.json(\?.*)?$/, '') : new URL('data/', location.href).href;
@@ -425,6 +444,7 @@ export async function undoFreezerAction(id) {
 // ---------- weekmenu ----------
 export async function saveMeal(meal) {
   const m = { id: meal.id || uid(), name: meal.name, ingredients: meal.ingredients || [], kids: Boolean(meal.kids), favorite: Boolean(meal.favorite), notes: meal.notes || '' };
+  for (const k of ['url', 'image', 'time', 'servings', 'source']) if (meal[k] != null) m[k] = meal[k];
   await db.put('meals', m);
   state.meals = await db.getAll('meals');
   changed();
