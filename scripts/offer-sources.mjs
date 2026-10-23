@@ -26,6 +26,14 @@ function hash(str) {
   return h.toString(36);
 }
 
+/** Kleinste afbeelding van minstens 200 px breed (AH levert meerdere formaten). */
+function ahImage(images) {
+  const list = (Array.isArray(images) ? images : []).filter((i) => i?.url);
+  if (!list.length) return null;
+  const ok = list.filter((i) => (i.width || 0) >= 200).sort((a, b) => (a.width || 0) - (b.width || 0));
+  return (ok[0] || list[list.length - 1]).url;
+}
+
 /** Zet één product uit de AH-bonus-API om naar ons aanbiedingsformaat. */
 export function ahProductToOffer(p, { mechanism = null, period = {} } = {}) {
   if (!p || !p.title) return null;
@@ -42,7 +50,8 @@ export function ahProductToOffer(p, { mechanism = null, period = {} } = {}) {
     validFrom: period.start || null,
     validTo: period.end || null,
     source: 'ah',
-    url: p.webshopId ? `https://www.ah.nl/producten/product/wi${p.webshopId}` : null,
+    url: p.webshopId ? `https://www.ah.nl/producten/product/wi${p.webshopId}` : 'https://www.ah.nl/bonus',
+    image: ahImage(p.images),
   };
 }
 
@@ -59,7 +68,7 @@ export function parseAhSection(json, period) {
         out.push({
           id: `ah:g${g.id || hash(g.segmentDescription)}`, store: 'ah', title: g.segmentDescription, brand: null, size: null,
           price: cents(g.exampleForPrice), was: cents(g.exampleFromPrice), mechanism: g.discountDescription || null,
-          validFrom: period.start || null, validTo: period.end || null, source: 'ah', group: true, url: null,
+          validFrom: period.start || null, validTo: period.end || null, source: 'ah', group: true, url: 'https://www.ah.nl/bonus', image: ahImage(g.images),
         });
       }
     }

@@ -50,7 +50,7 @@ function finish(store, list) {
     out.push({
       id: `${store}:${o.ref || hash(key)}`, store, title, brand: clean(o.brand), size: clean(o.size),
       price: o.price ?? null, was: o.was && o.price && o.was > o.price ? o.was : null,
-      mechanism: clean(o.mechanism), validFrom: o.validFrom || null, validTo: o.validTo || null, source: store, url: o.url || null,
+      mechanism: clean(o.mechanism), validFrom: o.validFrom || null, validTo: o.validTo || null, source: store, url: o.url || null, image: o.image || null,
     });
   }
   return out;
@@ -87,6 +87,10 @@ export function nuxtData(html) {
   return devalue(JSON.parse(m[1]));
 }
 
+/** Afbeeldingen van Dirk staan op hun bestandsserver (zoals de logo's in dezelfde pagina). */
+export const DIRK_FILES = 'https://web-fileserver.dirk.nl/';
+const dirkImage = (path) => (path ? DIRK_FILES + String(path).split('/').map(encodeURIComponent).join('/') : null);
+
 /** Dirk: data["offers-currentOffers"][].currentOffers[] met offerPrice/normalPrice. */
 export function parseDirk(html) {
   const d = nuxtData(html);
@@ -105,6 +109,7 @@ export function parseDirk(html) {
       mechanism: multi && price ? `${multi[1]} voor ${euroText(price)}` : free ? free[0] : price ? `voor ${euroText(price)}` : null,
       // Dirk zet lokale datums met een "Z" erachter (2026-10-25T23:59Z = zondag 25 okt): datumdeel overnemen.
       validFrom: String(o.startDate || '').slice(0, 10) || null, validTo: String(o.endDate || '').slice(0, 10) || null, url: 'https://www.dirk.nl/aanbiedingen',
+      image: dirkImage(o.products?.[0]?.productInformation?.image || o.image),
     });
   }
   return finish('dirk', list);
@@ -127,7 +132,7 @@ export function parseJumbo(html) {
     list.push({
       ref: p.id, title: p.title, size, brand: null,
       price, was: null, mechanism: label || null,
-      validFrom: day(p.start?.iso), validTo: day(p.end?.iso), url: p.url ? `https://www.jumbo.com${p.url}` : null,
+      validFrom: day(p.start?.iso), validTo: day(p.end?.iso), url: p.url ? `https://www.jumbo.com${encodeURI(p.url)}` : null, image: p.image || null,
     });
   };
   for (const r of runtimes) for (const s of r?.sections || []) {
@@ -172,7 +177,8 @@ export function parseHoogvliet(html) {
       ref: it.sku, title: it.display_name || it.name, size, brand: null, price, was, mechanism,
       validFrom: day(String(meta.valid_from || per.validFrom || '').replace(' ', 'T').replace(/\+00$/, 'Z')),
       validTo: day(String(meta.valid_to || per.validTo || '').replace(' ', 'T').replace(/\+00$/, 'Z')),
-      url: 'https://www.hoogvliet.com/aanbiedingen',
+      url: it.product_link || it.first_child_product_link ? `https://www.hoogvliet.com${it.product_link || it.first_child_product_link}` : 'https://www.hoogvliet.com/aanbiedingen',
+      image: it.thumbnail?.url || null,
     });
   }
   return finish('hoogvliet', list);
@@ -215,6 +221,7 @@ export function parseAction(html) {
       ref: p.id, title: p.title, brand: p.brand, size: String(p.description || '').split('|')[0],
       price, was: cents(p.price?.original?.amount), mechanism: price ? `voor ${euroText(price)}` : null,
       validFrom: range ? iso(range[1], range[2]) : null, validTo: range ? iso(range[3], range[4]) : null, url: p.href || null,
+      image: p.image ? `${p.image}`.replace('/image/upload/', '/image/upload/w_240/') : null,
     });
   }
   return finish('action', list);
@@ -244,6 +251,7 @@ export function parseLidl(html) {
       validFrom: it.storeStartDate ? day(it.storeStartDate * 1000) : day(pr.startDate),
       validTo: it.storeEndDate ? day(it.storeEndDate * 1000) : day(pr.endDate),
       url: it.canonicalUrl ? `https://www.lidl.nl${it.canonicalUrl}` : null,
+      image: it.image || null,
     });
   }
   return finish('lidl', list);

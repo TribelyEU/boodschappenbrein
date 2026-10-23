@@ -50,7 +50,7 @@ jobs:
       - name: Winkelpagina's bewaren voor diagnose
         if: github.event_name == 'workflow_dispatch' && inputs.debug
         continue-on-error: true
-        run: node scripts/probe-stores.mjs
+        run: node scripts/probe-stores.mjs && node scripts/probe-images.mjs
 
       - name: Opslaan in de repository
         run: |
