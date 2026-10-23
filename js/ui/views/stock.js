@@ -3,8 +3,8 @@ import { html, icon, toast } from '../dom.js';
 import { MODELS } from '../../core/stock-model.js';
 import { categoryModel } from '../../core/categories.js';
 import { formatDate } from '../../core/dates.js';
-import { statusChip, stockMeter, daysText, tag, empty, noDataCard } from '../components.js';
-import { inslagView, vriezerView, stockTabs, inslagActions } from './stockpile.js';
+import { statusChip, stockMeter, daysText, tag, empty, noDataCard, info } from '../components.js';
+import { vriezerSection, inslagActions } from './stockpile.js';
 
 let filterModel = 'alle';
 let showUnknown = false;
@@ -51,52 +51,54 @@ function predictionView() {
     buckets.onvoldoende.sort((a, b) => b[1].purchases - a[1].purchases);
     const vac = state.settings.vacations || [];
 
+    const low = [...buckets.op, ...buckets.bijna].sort((a, b) => a[1].daysLeft - b[1].daysLeft);
+    const okList = buckets.voldoende;
+    const shownOk = showAllOk ? okList : okList.slice(0, 6);
     return html`
-      <div class="page-head">
-        <div><h1>Voorraad ${tag.voorspelling}</h1><p class="muted">Geschat uit uw aankoopritme. Klopt iets niet? Eén tik corrigeert en de app leert ervan.</p></div>
-      </div>
-      ${stockTabs('voorspelling')}
-      <div class="seg" style="margin-bottom:12px">
-        ${[['alle', 'Alles'], ...Object.entries(MODELS).map(([k, m]) => [k, m.label.split(' ')[0]])].map(([k, l]) => html`<button class="${filterModel === k ? 'on' : ''}" data-action="filter" data-m="${k}">${l}</button>`)}
-      </div>
-      ${vac.some((v) => v.to >= derived().today) ? html`<div class="notice" style="margin-bottom:12px">Vakantie ingesteld: ${vac.map((v) => `${formatDate(v.from)} – ${formatDate(v.to)}`).join(', ')}. Die dagen tellen niet als verbruik.</div>` : ''}
+      <div class="page-head"><div><h1>Voorraad ${info('Hoe werkt de voorraad?', STOCK_INFO)}</h1></div></div>
+      ${vac.some((v) => v.to >= derived().today) ? html`<div class="notice" style="margin-bottom:12px">Vakantie: ${vac.map((v) => `${formatDate(v.from, 'short')} – ${formatDate(v.to, 'short')}`).join(', ')}. Die dagen tellen niet als verbruik.</div>` : ''}
 
-      ${ORDER.filter((k) => k !== 'onvoldoende').map((k) => buckets[k].length ? html`
-        <div class="section-label">${HEADINGS[k]} · ${buckets[k].length}</div>
-        <div class="card tight"><div class="rows">${buckets[k].map(([id, pred]) => row(id, pred))}</div></div>` : '')}
+      <div class="section-head" style="margin-top:6px"><h2>Bijna op</h2><span class="small muted">${low.length}</span></div>
+      ${low.length ? html`<div class="card tight"><div class="rows">${low.map(([id, pred]) => row(id, pred))}</div></div>`
+        : html`<div class="card"><p class="muted" style="margin:0">${predictions.size ? 'Niets dat met redelijke zekerheid bijna op is.' : 'Voorspellingen verschijnen zodra producten minstens 3 keer gekocht zijn.'}</p></div>`}
 
-      ${!buckets.op.length && !buckets.bijna.length && !buckets.voldoende.length ? html`<div class="card">${empty('Nog geen voorspellingen', 'Per product zijn minstens 3 aankopen over ruim een week nodig. Importeer meer bonnen.')}</div>` : ''}
+      ${vriezerSection()}
 
-      <div class="section-label between"><span>Onvoldoende gegevens · ${buckets.onvoldoende.length}</span>
-        <button class="btn small ghost" data-action="toggleUnknown">${showUnknown ? 'Verbergen' : 'Tonen'}</button></div>
-      ${showUnknown ? html`<div class="card tight"><div class="rows">${buckets.onvoldoende.slice(0, 150).map(([id, pred]) => html`
-        <div class="row-item clickable" data-action="nav" data-to="product/${id}">
-          <div class="grow"><div class="title">${state.products.get(id).name}</div><div class="sub">${pred.reason}</div></div>
-          ${statusChip(pred)}
-        </div>`)}</div></div>` : ''}
+      ${okList.length ? html`
+        <div class="section-head"><h2>Genoeg in huis</h2><span class="small muted">${okList.length}</span></div>
+        <div class="card tight"><div class="rows">${shownOk.map(([id, pred]) => okRow(id, pred))}</div>
+          ${okList.length > 6 ? html`<button class="btn small ghost block" data-action="toggleOk">${showAllOk ? 'Minder tonen' : `Alle ${okList.length} tonen`}</button>` : ''}</div>` : ''}
 
-      <details class="card" style="margin-top:14px">
-        <summary>Hoe werkt de voorspelling?</summary>
-        <div class="small muted" style="margin-top:10px">
-          <p>Wat u bij een aankoop kocht, is meestal op rond de volgende aankoop. Uit die intervallen schat de app uw verbruik per dag, waarbij recente weken zwaarder tellen. Aankopen bij alle supermarkten tellen mee.</p>
-          <p>Vier modellen: <strong>snel</strong> (melk, brood, fruit — reageert snel op verandering), <strong>houdbaar</strong> en <strong>huishoudelijk</strong> (rustiger), en <strong>onregelmatig</strong> (snacks — alleen een voorspelling als het ritme echt regelmatig is).</p>
-          <p>Bij onregelmatige aankopen, te weinig aankopen of producten die u lang niet kocht, toont de app <em>Onvoldoende gegevens</em> in plaats van te gokken. Vakanties stelt u in bij Instellingen.</p>
-        </div>
-      </details>`;
+      ${buckets.onvoldoende.length ? html`
+        <button class="btn small ghost" style="margin-top:18px" data-action="toggleUnknown">${showUnknown ? 'Verberg' : 'Toon'} ${buckets.onvoldoende.length} producten met te weinig gegevens</button>
+        ${showUnknown ? html`<div class="card tight" style="margin-top:8px"><div class="rows">${buckets.onvoldoende.slice(0, 150).map(([id, pred]) => html`
+          <div class="row-item clickable" data-action="nav" data-to="product/${id}">
+            <div class="grow"><div class="title">${state.products.get(id).name}</div><div class="sub">${pred.reason}</div></div>
+          </div>`)}</div></div>` : ''}` : ''}`;
   }
 }
 
+const STOCK_INFO = `<p>De app schat uit jullie aankopen hoe snel iets opgaat. Wat je bij een aankoop kocht, is meestal op rond de volgende keer dat je het koopt.</p>
+<p>Klopt iets niet? Tik <strong>Op</strong>, <strong>Bijna</strong> of <strong>Genoeg</strong>; de app leert daarvan.</p>
+<p>Bij te weinig of onregelmatige aankopen gokt de app niet en zet het product onder "te weinig gegevens". Vakanties stel je in bij Instellingen.</p>`;
+
+let showAllOk = false;
+
+function okRow(id, pred) {
+  const p = state.products.get(id);
+  return html`<div class="row-item">
+    <div class="grow clickable" data-action="nav" data-to="product/${id}"><div class="title">${p.name}</div><div class="sub">${daysText(pred)}</div></div>
+    <div class="stock-actions"><button data-action="adj" data-id="${id}" data-level="op" title="Het is op">Op</button></div>
+  </div>`;
+}
+
 export default {
-  render(params, q) {
-    const tab = q.get('tab') || 'voorspelling';
-    if (tab === 'inslag') return inslagView();
-    if (tab === 'vriezer') return vriezerView();
-    return predictionView();
-  },
+  render() { return predictionView(); },
   actions: {
     ...inslagActions,
     filter(el, ev, { rerender }) { filterModel = el.dataset.m; rerender(); },
     toggleUnknown(el, ev, { rerender }) { showUnknown = !showUnknown; rerender(); },
+    toggleOk(el, ev, { rerender }) { showAllOk = !showAllOk; rerender(); },
     async adj(el) {
       const a = await adjustStock(el.dataset.id, el.dataset.level);
       const name = state.products.get(el.dataset.id)?.name;

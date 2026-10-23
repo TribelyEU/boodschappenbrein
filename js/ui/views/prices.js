@@ -7,7 +7,7 @@ import { daysBetween, formatDate, todayISO, localDateOf } from '../../core/dates
 import { unitLabel } from '../../core/products.js';
 import { priceHistory } from '../../core/analytics.js';
 import { empty } from '../components.js';
-import { offersView, offerActions, priceTabs } from './offers.js';
+import { offerActions } from './offers.js';
 
 const SRC = PRICE_SOURCES.checkjebon;
 const ui = { loading: false, error: null, meta: null, idx: null, stores: [], searchQ: '', basketFrom: 'lijst' };
@@ -178,10 +178,9 @@ function searchSection() {
 
 export default {
   render(params, query) {
-    if ((query.get('tab') || 'aanbiedingen') === 'aanbiedingen') return offersView();
     return html`
+      <a class="small" href="#/aanbiedingen">${icon('back', 14)} Aanbiedingen</a>
       <div class="page-head"><div><h1>Prijzen vergelijken</h1><p class="muted">Gewone winkelprijzen (zonder acties): waar is onze lijst het voordeligst?</p></div></div>
-      ${priceTabs('vergelijken')}
       ${sourceCard()}
       ${ui.loading ? html`<div class="card" style="margin-top:14px"><div class="progress"><span class="spinner"></span>Prijsdata verwerken…</div></div>` : ''}
       ${ui.idx ? html`${basketSection()}${searchSection()}` : (!ui.loading ? html`<div class="card" style="margin-top:14px">${empty('Geen actuele prijzen', 'Haal eerst prijsdata op. Uw eigen betaalde prijzen vindt u altijd bij elk product onder Analyse.')}</div>` : '')}

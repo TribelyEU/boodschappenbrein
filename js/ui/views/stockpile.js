@@ -284,3 +284,87 @@ export const inslagActions = {
   async frzEmpty(el) { const r = await freezerAction(el.dataset.id, 'leeg'); toast('Gemarkeerd als leeg', { action: 'Ongedaan maken', onAction: () => undoFreezerAction(r.id) }); },
   async freezerCap(el) { const v = Math.max(5, Math.min(400, +el.value || 40)); await setSetting('freezerCapacity', v); },
 };
+
+// ---------- compacte secties (nieuwe indeling) ----------
+
+const INSLAG_INFO = `<p>Producten waarbij het loont om bij een goede prijs voor een paar weken in te slaan, zoals wc-papier, koffie, wasmiddel of vlees voor de vriezer.</p>
+<p><strong>Doelprijs:</strong> automatisch de goedkoopste kwart van wat jullie zelf betaalden (vanaf 4 aankopen), of zelf in te stellen via het tandwiel.</p>
+<p><strong>Ander merk bij actie</strong> (bv. Starbucks naast Lidl-cups): voeg het toe via het tandwiel als "upgrade". Het wordt alleen aangeraden als het per stuk niet te duur is.</p>
+<p>Zie je ergens een aanbieding (ook bij Lidl of Kruidvat)? Tik op het <strong>labeltje</strong> naast het product: de app zegt of het loont en hoeveel je moet kopen. Met het <strong>tandwiel</strong> stel je het product in.</p>`;
+
+const VRIEZER_INFO = `<p>Je hoeft niets bij te houden. Koop je van een vriezerproduct meer dan normaal (bv. 3 pakken kipfilet in plaats van 1), dan telt het extra deel als ingevroren. Wat er nog ligt, schat de app uit jullie verbruik; het oudste gaat eerst op.</p>
+<p>Klopt het niet? Tik <strong>Leeg</strong> of <strong>+1</strong>. Een product wordt een vriezerproduct via het tandwiel bij Inslagproducten.</p>
+<p>Richtlijnen: gehakt ±3 maanden, kip/vis/vlees ±4 maanden, brood ±2,5 maand, kaas ±3 maanden.</p>`;
+
+function entryRow(e, c) {
+  const pred = entryPrediction(e, c);
+  const members = e.members.filter((m) => state.products.has(m.productId));
+  const std = members.find((m) => m.role !== 'upgrade') || members[0];
+  const st = std ? priceStats(c.facts, std.productId) : { observations: 0 };
+  const target = e.target ?? st.autoTarget;
+  const weeks = pred.ratePerDay ? (pred.estimatedStock || 0) / (pred.ratePerDay * 7) : null;
+  const frac = weeks != null ? Math.max(0, Math.min(1, weeks / e.maxWeeks)) : 0;
+  const rh = members.map((m) => derived().rhythm.byProduct.get(m.productId)).filter((r) => r?.status === 'ritme').sort((a, b) => a.weeksUntil - b.weeksUntil)[0];
+  const upgrades = members.filter((m) => m.role === 'upgrade').map((m) => state.products.get(m.productId).name);
+  const line2 = [
+    weeks != null ? `nog ±${fmtNum(weeks)} wk` : 'voorraad onbekend',
+    st.observations ? `normaal ${euro(st.typical)}/${st.unitLabel}` : '',
+    target != null ? `doel ${euro(target)}` : '',
+  ].filter(Boolean).join(' · ');
+  return html`<div class="row-item">
+    <div class="grow">
+      <div class="title">${e.name}${e.location === 'vriezer' ? html` <span class="chip info">vriezer</span>` : ''}</div>
+      <div class="sub">${line2}</div>
+      ${upgrades.length ? html`<div class="tiny muted">bij actie ook: ${upgrades.join(', ')}</div>` : ''}
+      ${rh ? html`<div class="tiny" style="color:var(--good);font-weight:650">${rh.inPromoNow ? 'Nu in de Bonus' : `Bonus verwacht ${rh.weeksUntil <= 0 ? 'deze week' : rh.weeksUntil === 1 ? 'volgende week' : `over ±${rh.weeksUntil} weken`}`}</div>` : ''}
+      <div class="meter ${weeks != null && weeks < 1.5 ? 'warn' : ''}" style="margin-top:6px;max-width:240px"><i style="width:${Math.round(frac * 100)}%"></i></div>
+    </div>
+    <div style="display:flex;gap:2px;align-self:center">
+      <button class="icon-btn" data-action="judgeDeal" data-id="${e.id}" aria-label="Aanbieding beoordelen" title="Aanbieding beoordelen">${icon('tag', 19)}</button>
+      <button class="icon-btn" data-action="editEntry" data-id="${e.id}" aria-label="Instellen" title="Instellen">${icon('settings', 19)}</button>
+    </div>
+  </div>`;
+}
+
+export function inslagSection() {
+  const d = derived();
+  const c = ctx();
+  const inEntries = new Set(state.stockpile.flatMap((e) => e.members.map((m) => m.productId)));
+  const sugg = d.facts.length ? suggestEntries(d.facts, state.products, d.today, { existing: inEntries, freezer: state.settings.hasFreezer !== false, rhythm: d.rhythm.byProduct }).slice(0, 3) : [];
+  return html`
+    <div class="section-head" id="inslag"><h2>Inslagproducten ${html`<button class="info-btn" data-action="info" data-title="Inslagproducten" data-body="${INSLAG_INFO}" aria-label="Uitleg">i</button>`}</h2>
+      <button class="btn small" data-action="addEntry">${icon('plus', 16)}Toevoegen</button></div>
+    ${state.stockpile.length
+      ? html`<div class="card tight"><div class="rows">${state.stockpile.map((e) => entryRow(e, c))}</div></div>`
+      : html`<div class="card"><p class="muted" style="margin:0">Nog geen inslagproducten. Tik op <strong>Toevoegen</strong>, of kies een voorstel hieronder.</p></div>`}
+    ${sugg.length ? html`<div class="card tight" style="margin-top:10px">
+      <div class="tiny muted" style="padding:6px 2px 0;font-weight:650;text-transform:uppercase;letter-spacing:.04em">Voorgesteld</div>
+      <div class="rows">${sugg.map((s) => html`
+        <div class="row-item">
+          <div class="grow"><div class="title">${s.name}</div><div class="sub">tot ±${euro(s.monthly)} per maand · ${s.purchases}× gekocht</div></div>
+          <button class="btn small" data-action="addSuggested" data-id="${s.productId}">${icon('plus', 14)}</button>
+        </div>`)}</div></div>` : ''}`;
+}
+
+export function vriezerSection() {
+  const d = derived();
+  const entries = state.stockpile.filter((e) => e.location === 'vriezer');
+  const cap = state.settings.freezerCapacity || 40;
+  const used = d.freezerUsed;
+  const items = entries.map((e) => ({ e, f: d.freezer.get(e.id) })).filter((x) => x.f).sort((a, b) => (b.f.overdue - a.f.overdue) || (a.f.oldest || '9').localeCompare(b.f.oldest || '9'));
+  return html`
+    <div class="section-head" id="vriezer"><h2>Vriezer ${html`<button class="info-btn" data-action="info" data-title="Vriezer" data-body="${VRIEZER_INFO}" aria-label="Uitleg">i</button>`}</h2>
+      ${entries.length ? html`<span class="small muted">±${fmtNum(used)} van ${cap} pakken</span>` : ''}</div>
+    ${items.length ? html`<div class="card tight"><div class="rows">${items.map(({ e, f }) => html`
+      <div class="row-item">
+        <div class="grow">
+          <div class="title">${e.name} ${f.overdue ? html`<span class="chip bad">opmaken</span>` : ''}</div>
+          <div class="sub">${f.packs > 0 ? `±${fmtNum(f.packs)} pak · sinds ${formatDate(f.oldest, 'short')}` : 'waarschijnlijk op'}</div>
+        </div>
+        <div class="stock-actions">
+          <button data-action="frzAdd" data-id="${e.id}" title="Zelf iets ingevroren">+1</button>
+          <button data-action="frzEmpty" data-id="${e.id}" title="Niets meer in de vriezer">Leeg</button>
+        </div>
+      </div>`)}</div></div>`
+      : html`<div class="card"><p class="muted" style="margin:0">Nog geen vriezerproducten. Zet bij <a href="#/aanbiedingen">Inslagproducten</a> een product op "Vriezer" (vlees, vis, brood, kaas).</p></div>`}`;
+}

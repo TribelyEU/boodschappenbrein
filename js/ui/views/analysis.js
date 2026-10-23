@@ -187,14 +187,16 @@ function receiptsTab() {
 
 export default {
   render(params, q) {
-    if (!derived().facts.length) return html`<div class="page-head"><div><h1>Analyse</h1></div></div>${noDataCard()}`;
+    const addBtn = html`<a class="big-action" href="#/importeren" style="margin-bottom:16px"><span class="ic">${icon('plus', 22)}</span><span>Bon toevoegen<small>PDF of foto van een kassabon</small></span></a>`;
+    if (!derived().facts.length) return html`<div class="page-head"><div><h1>Uitgaven</h1></div></div>${addBtn}${noDataCard()}`;
     const tab = q.get('tab') || 'uitgaven';
     return html`
-      <div class="page-head"><div><h1>Analyse</h1><p class="muted">Waar gaat het geld naartoe, en waar valt te besparen?</p></div></div>
+      <div class="page-head"><div><h1>Uitgaven</h1></div></div>
+      ${addBtn}
       <div class="seg" style="margin-bottom:14px">
-        ${[['uitgaven', 'Uitgaven'], ['besparen', 'Besparen'], ['bonus', 'Bonus'], ['bonnen', 'Bonnen']].map(([k, l]) => html`<button class="${tab === k ? 'on' : ''}" data-action="nav" data-to="analyse?tab=${k}">${l}</button>`)}
+        ${[['uitgaven', 'Overzicht'], ['besparen', 'Besparen'], ['bonnen', 'Alle bonnen']].map(([k, l]) => html`<button class="${tab === k ? 'on' : ''}" data-action="nav" data-to="analyse?tab=${k}">${l}</button>`)}
       </div>
-      ${tab === 'besparen' ? savingsTab() : tab === 'bonus' ? bonusTab() : tab === 'bonnen' ? receiptsTab() : spendingTab(q)}`;
+      ${tab === 'besparen' ? savingsTab() : tab === 'bonnen' ? receiptsTab() : spendingTab(q)}`;
   },
 };
 

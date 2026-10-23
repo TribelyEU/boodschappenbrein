@@ -49,7 +49,8 @@ export default {
     return html`
       <div class="page-head">
         <div><h1>Boodschappenlijst</h1><p class="muted">${open.length ? `${open.length} te halen` : 'Lijst is leeg'}${done.length ? ` · ${done.length} afgevinkt` : ''}</p></div>
-        <button class="btn small" data-action="share" ${state.list.length ? '' : 'disabled'}>${icon('share', 16)}Delen</button>
+        <div class="gap8"><a class="btn small" href="#/menu">${icon('menu', 16)}Weekmenu</a>
+        <button class="btn small" data-action="share" ${state.list.length ? '' : 'disabled'}>${icon('share', 16)}Delen</button></div>
       </div>
 
       ${incoming.length ? html`<div class="card" style="margin-bottom:14px">
@@ -60,7 +61,6 @@ export default {
 
       ${sugg.length ? html`<div class="card" style="margin-bottom:14px">
         <div class="card-head"><h2>Suggesties ${tag.voorspelling}</h2><button class="btn small ghost" data-action="addAllSuggestions">Alle ${sugg.length} toevoegen</button></div>
-        <p class="muted small" style="margin-top:-6px">Op basis van uw aankoopritme. Er wordt niets toegevoegd zonder dat u tikt.</p>
         <div class="rows">${sugg.slice(0, 8).map((s) => html`
           <div class="row-item">
             <div class="grow"><div class="title">${s.product.name}</div><div class="sub">${s.pred.status.label} · ${daysText(s.pred)}</div>${(() => {

@@ -70,6 +70,7 @@ export default {
     const meals = [...state.meals].sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
     const byId = new Map(meals.map((m) => [m.id, m]));
     return html`
+      <a class="small" href="#/lijst">${icon('back', 14)} Boodschappenlijst</a>
       <div class="page-head"><div><h1>Weekmenu</h1><p class="muted">Plan maaltijden en zet ingrediënten met één tik op de lijst.</p></div>
         <button class="btn small primary" data-action="newMeal">${icon('plus', 16)}Gerecht</button></div>
       <div class="between" style="margin-bottom:10px">

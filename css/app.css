@@ -282,3 +282,19 @@ details summary { cursor: pointer; font-weight: 600; }
 .rhythm-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--line-strong); }
 .rhythm-legend .l-promo::before { background: var(--good); }
 .rhythm-legend .l-next::before { background: var(--good-soft); border: 2px solid var(--good); width: 6px; height: 6px; }
+
+/* ---------- rustiger opbouw ---------- */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 26px 2px 10px; }
+.section-head h2 { font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.section-head .link { font-size: 15px; font-weight: 600; }
+.info-btn { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--muted);
+  font: italic 700 13px/1 Georgia, serif; display: inline-grid; place-items: center; cursor: pointer; padding: 0; flex: none; }
+.info-btn:hover { color: var(--accent); border-color: var(--accent); }
+.big-action { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink);
+  font-weight: 650; font-size: 17px; border: 0; width: 100%; cursor: pointer; text-align: left; }
+.big-action .ic { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.16); display: grid; place-items: center; flex: none; }
+.big-action small { display: block; font-weight: 500; font-size: 13px; opacity: .85; }
+.quiet-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.quiet-line .num-big { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+.tabbar { grid-template-columns: repeat(5, 1fr); }
+.tab span { font-size: 11px; }

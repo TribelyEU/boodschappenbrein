@@ -64,15 +64,31 @@ function covers(token, list) {
  * Een product past als álle woorden van zijn basisnaam (zonder merk en inhoud) in de aanbieding voorkomen.
  * @returns {{productId, score, brandMatch:boolean|null}[]}
  */
+// Woorden die van een product iets anders maken. Staat zo'n woord in de aanbieding maar niet in jullie
+// product, dan is het een ander product (vochtig toiletpapier ≠ toiletpapier, gemarineerde kipfilet ≠ kipfilet).
+const QUALIFIERS = ['vochtig', 'gemarineerd', 'marinade', 'gerookt', 'gepaneerd', 'gegrild', 'gekruid', 'mini', 'light', 'zero', 'lactosevrij',
+  'glutenvrij', 'vegan', 'vegetarisch', 'plantaardig', 'kids', 'baby', 'drink', 'shake', 'reep', 'repen', 'koek', 'chips', 'saus', 'soep',
+  'smoothie', 'ijs', 'poeder', 'capsule', 'pads', 'bonen', 'gemalen', 'oploskoffie', 'decafe', 'cafeinevrij', 'biologisch', 'bio'];
+
+function qualifiersIn(text) {
+  const n = ' ' + normalizeText(text) + ' ';
+  return QUALIFIERS.filter((q) => n.includes(' ' + q) || (q.length >= 6 && n.includes(q)));
+}
+
 export function matchOffer(offer, products, brandOf = new Map()) {
   const ot = offer._tokens || (offer._tokens = offerTokens(offer));
   if (!ot.length) return [];
+  const offerQuals = offer._quals || (offer._quals = qualifiersIn(offer.title));
   const offerBrand = normalizeText(offer.brand || detectBrand(offer.title).brand || '');
   const out = [];
   for (const p of products.values()) {
     const kt = p.key.split(' ').filter(Boolean);
     if (!kt.length || (kt.length === 1 && kt[0].length < 4)) continue;
     if (!kt.every((t) => covers(t, ot))) continue;
+    if (offerQuals.length) {
+      const mine = qualifiersIn(`${p.name} ${p.key}`);
+      if (offerQuals.some((q) => !mine.includes(q))) continue;
+    }
     const myBrand = normalizeText(brandOf.get(p.id) || '');
     const brandMatch = offerBrand && myBrand ? offerBrand === myBrand || offerBrand.startsWith(myBrand) || myBrand.startsWith(offerBrand) : null;
     const score = kt.length / ot.length + (brandMatch ? 0.3 : brandMatch === false ? -0.2 : 0);

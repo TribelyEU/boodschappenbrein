@@ -6,36 +6,10 @@ import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
 import { normalizeText } from '../../core/text.js';
-import { tag, empty } from '../components.js';
+import { tag, empty, sectionHead } from '../components.js';
 
 let busy = false;
 let query = '';
-
-export function priceTabs(active) {
-  return html`<div class="seg" style="margin-bottom:14px">${[['aanbiedingen', 'Aanbiedingen'], ['vergelijken', 'Vergelijken']].map(([k, l]) => html`<button class="${active === k ? 'on' : ''}" data-action="nav" data-to="prijzen?tab=${k}">${l}</button>`)}</div>`;
-}
-
-function statusCard() {
-  const d = derived();
-  const rec = state.offers;
-  const st = d.offerStatus;
-  const mine = (state.settings.myStores || []).map((s) => s.id);
-  const sources = st.ok ? st.sources : {};
-  return html`<div class="card">
-    <div class="card-head"><h2>Folders van deze week</h2>
-      ${!st.ok ? html`<span class="chip muted">Geen gegevens</span>` : st.stale ? html`<span class="chip warn">${st.age} dagen oud</span>` : html`<span class="chip good">Actueel</span>`}</div>
-    ${st.ok ? html`<p class="small" style="margin-top:-4px">Bijgewerkt ${formatDate(localDateOf(st.generatedAt))} · ${st.count} aanbiedingen</p>
-      <div class="qa" style="flex-wrap:wrap">${mine.map((id) => {
-        const s = sources[id];
-        const good = s?.ok && s.count > 0;
-        const label = good ? ` · ${s.count}` : s?.ok || (s && !s.error) ? ' · 0 gevonden' : s ? ' · mislukt' : ' · geen automatische bron';
-        return html`<span class="chip ${good ? 'good' : s?.error ? 'bad' : s ? 'warn' : 'muted'}" title="${s?.error || s?.note || (s ? '' : 'Beoordeel aanbiedingen van deze winkel zelf via Voorraad → Inslag → Aanbieding beoordelen')}">${storeName(id)}${label}</span>`;
-      })}</div>`
-      : html`<p class="small muted" style="margin-top:-4px">${rec?.error ? `Ophalen lukte niet: ${rec.error}.` : st.reason || 'Nog geen aanbiedingen geladen.'} De aanbiedingen worden elke ochtend opgehaald door een klein script op GitHub; zie de installatiegids (LEESMIJ.md).</p>`}
-    ${rec?.error && st.ok ? html`<p class="small" style="color:var(--warn)">Laatste poging mislukt: ${rec.error}. De vorige gegevens worden getoond.</p>` : ''}
-    <div class="btn-row" style="margin-top:8px"><button class="btn small" data-action="refreshOffers" ${busy ? 'disabled' : ''}>${busy ? html`<span class="spinner"></span>Bezig…` : html`${icon('undo', 14)}Vernieuwen`}</button></div>
-  </div>`;
-}
 
 function itemRow(it) {
   const o = it.offer;
@@ -47,13 +21,8 @@ function itemRow(it) {
   return html`<div class="row-item" style="align-items:flex-start;flex-wrap:wrap">
     <div class="grow" style="min-width:58%">
       <div class="title" style="white-space:normal">${it.name}${it.brandMatch === false ? html` <span class="chip warn">ander merk</span>` : ''}</div>
-      <div class="sub" style="white-space:normal">${o.title}</div>
-      <div class="tiny muted" style="margin-top:2px">${sub}</div>
-      <div class="gap8 wrap" style="margin-top:4px">
-        ${it.kind === 'inslag' ? html`<span class="chip good">inslaan</span>` : ''}
-        ${it.needSoon ? html`<span class="chip info">nodig deze week</span>` : ''}
-        ${it.discountVsYou ? html`<span class="chip">${Math.round(it.discountVsYou * 100)}% onder jullie prijs</span>` : ''}
-      </div>
+      <div class="sub" style="white-space:normal">${o.title} · ${sub}</div>
+      ${it.kind === 'inslag' || it.needSoon ? html`<div class="tiny" style="margin-top:3px;color:var(--good);font-weight:650">${it.kind === 'inslag' ? 'Inslaan' : 'Heb je deze week nodig'}</div>` : ''}
     </div>
     <div style="text-align:right">
       <div class="amount num" style="color:var(--good)">±${euro(it.saving)}</div>
@@ -75,37 +44,56 @@ function searchResults() {
     </div>`)}</div>` : html`<p class="muted" style="padding:6px">Niets gevonden voor “${query}”.</p>`}</div>`;
 }
 
-export function offersView() {
+/** Korte statusregel: van wanneer de Bonus is, en vernieuwen. Details per winkel achter het i-knopje. */
+function statusLine() {
+  const d = derived();
+  const rec = state.offers;
+  const st = d.offerStatus;
+  const ah = st.ok ? st.sources?.ah : null;
+  const text = !st.ok ? (rec?.error ? `Ophalen lukte niet: ${rec.error}` : st.reason || 'Nog geen aanbiedingen.')
+    : ah?.period ? `AH-Bonus ${formatDate(ah.period.start, 'short')} t/m ${formatDate(ah.period.end, 'short')} · ${st.count} acties`
+      : `Bijgewerkt ${formatDate(localDateOf(st.generatedAt), 'short')} · ${st.count} acties`;
+  return html`<div class="between small" style="color:var(--muted);margin:-2px 2px 10px">
+    <span>${st.ok && st.stale ? html`<span style="color:var(--warn)">${text} (${st.age} dagen oud)</span>` : text}</span>
+    <button class="btn small ghost" data-action="refreshOffers" ${busy ? 'disabled' : ''}>${busy ? html`<span class="spinner"></span>` : 'Vernieuwen'}</button>
+  </div>`;
+}
+
+const OFFERS_INFO = `<p>Elke ochtend haalt een klein script op GitHub de Bonus-aanbiedingen van Albert Heijn op. Jullie aankopen gaan daar nooit naartoe: de vergelijking gebeurt op deze telefoon.</p>
+<p>Je ziet alleen acties die voor jullie echt goedkoper zijn dan wat jullie normaal betalen. Het bedrag is de besparing voor de voorgestelde hoeveelheid.</p>
+<p>Voor Lidl, Kruidvat en andere winkels is er geen bron die automatisch ophalen toestaat. Zie je daar iets goeds, tik dan bij een inslagproduct op <strong>Aanbieding beoordelen</strong>.</p>`;
+
+/** Sectie "Deze week in de Bonus" voor het Aanbiedingen-scherm (of een korte versie voor Vandaag). */
+export function offersSection({ compact = false } = {}) {
   const d = derived();
   const w = d.weekly;
+  const items = w?.items || [];
+  if (compact) {
+    if (!items.length) return '';
+    return html`<div class="card">
+      <div class="quiet-line"><strong>Deze week voordelig</strong><span class="num" style="color:var(--good);font-weight:700">±${euro(w.total)}</span></div>
+      <div class="rows" style="margin-top:6px">${items.slice(0, 3).map((it) => html`
+        <div class="row-item clickable" data-action="nav" data-to="aanbiedingen">
+          <div class="grow"><div class="title">${it.name}</div><div class="sub">${storeName(it.offer.store)} · ${it.offer.mechanism || 'aanbieding'}</div></div>
+          <span class="num" style="color:var(--good);font-weight:650">±${euro(it.saving)}</span>
+        </div>`)}</div>
+      ${items.length > 3 ? html`<a class="link small" href="#/aanbiedingen" style="display:block;margin-top:8px">Nog ${items.length - 3} aanbiedingen →</a>` : ''}
+    </div>`;
+  }
   return html`
-    <div class="page-head"><div><h1>Aanbiedingen</h1><p class="muted">Alleen wat voor jullie interessant is, vergeleken met wat jullie zelf normaal betalen.</p></div></div>
-    ${priceTabs('aanbiedingen')}
-    ${statusCard()}
-    ${w ? (w.items.length ? html`
-      <div class="card" style="margin-top:14px;background:var(--accent);color:var(--accent-ink);border:0">
-        <div style="opacity:.8;font-size:14px">Deze week voordelig voor jullie ${html`<span class="chip" style="background:rgba(255,255,255,.15);color:inherit;border:0">schatting</span>`}</div>
-        <div style="font-size:30px;font-weight:700;margin-top:2px" class="num">±${euro(w.total)}</div>
-        <div class="small" style="opacity:.9">${w.items.length} aanbiedingen in ${w.byStore.size} winkel${w.byStore.size === 1 ? '' : 's'} · uit ${w.considered} bekeken</div>
-      </div>
+    ${sectionHead('Deze week voor jullie', { infoTitle: 'Over de aanbiedingen', infoBody: OFFERS_INFO })}
+    ${statusLine()}
+    ${items.length ? html`
       ${[...w.byStore.entries()].map(([store, list]) => html`
-        <div class="section-label between"><span>${storeName(store)} · ±${euro(list.reduce((t, x) => t + x.saving, 0))}</span>
-          <button class="btn small ghost" data-action="storeToList" data-store="${store}">Alles op de lijst</button></div>
-        <div class="card tight"><div class="rows">${list.map(itemRow)}</div></div>`)}
-      <p class="muted tiny">Besparing = wat jullie normaal betalen min de actieprijs, voor de voorgestelde hoeveelheid. Bij inslagproducten tot jullie maximale voorraad; bij vaste producten jullie gebruikelijke hoeveelheid.</p>`
-      : html`<div class="card" style="margin-top:14px">${empty('Niets bijzonders deze week', 'Geen aanbiedingen die duidelijk goedkoper zijn dan wat jullie normaal betalen voor jullie vaste producten. Hoe meer bonnen, hoe beter de app dit kan beoordelen.')}</div>`)
-      : ''}
+        <div class="card tight" style="margin-bottom:12px">
+          <div class="between" style="padding:6px 2px 2px"><strong>${storeName(store)} · <span style="color:var(--good)">±${euro(list.reduce((t, x) => t + x.saving, 0))}</span></strong>
+            <button class="btn small ghost" data-action="storeToList" data-store="${store}">Alles op lijst</button></div>
+          <div class="rows">${list.map(itemRow)}</div>
+        </div>`)}`
+      : html`<div class="card"><p class="muted" style="margin:0">${d.offerStatus.ok ? 'Geen acties die duidelijk goedkoper zijn dan wat jullie normaal betalen. Hoe meer bonnen, hoe beter de app dit ziet.' : 'Zodra de aanbiedingen binnen zijn, zie je hier wat voor jullie interessant is.'}</p></div>`}
     ${state.offers?.data?.offers?.length ? html`
-      <div class="section-label">Alle aanbiedingen doorzoeken</div>
-      <form class="searchbox" data-submit="offerSearch">${icon('search', 20)}<input class="input" name="q" value="${query}" placeholder="bv. koffiecups, pampers, wasmiddel" autocomplete="off" enterkeyhint="search"></form>
-      ${searchResults()}` : ''}
-    <details class="card" style="margin-top:14px"><summary>Waar komen deze aanbiedingen vandaan?</summary>
-      <div class="small muted" style="margin-top:8px">
-        <p>Elke ochtend haalt een klein script op GitHub de openbare Bonus-aanbiedingen van Albert Heijn op via de (onofficiële) app-API. Jullie aankopen gaan daar nooit naartoe; de vergelijking gebeurt op dit apparaat.</p>
-        <p>Voor de andere winkels is er (nog) geen bron die automatische toegang toestaat: Folderz.nl blokkeert dit bewust, en die blokkade omzeilt de app niet. Zie je in een folder iets interessants, gebruik dan <strong>Voorraad → Inslag → Aanbieding beoordelen</strong>.</p>
-        <p>Beide bronnen zijn onofficieel en kunnen veranderen. Lukt het ophalen niet, dan ziet u dat hierboven per winkel; de vorige gegevens blijven dan staan en de rest van de app werkt gewoon.</p>
-        <p>Persoonlijke Bonus Box-aanbiedingen uit de AH-app zitten er niet in: die vragen om inloggen.</p>
-      </div></details>`;
+      <form class="searchbox" data-submit="offerSearch" style="margin-top:12px">${icon('search', 20)}<input class="input" name="q" value="${query}" placeholder="Zoek in alle ${state.offers.data.offers.length} acties…" autocomplete="off" enterkeyhint="search"></form>
+      ${searchResults()}` : ''}`;
 }
 
 function findItem(key) {

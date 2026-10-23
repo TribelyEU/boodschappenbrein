@@ -761,6 +761,19 @@ test('aanbieding koppelen: geen losse woorddelen (echte fouten uit de eerste AH-
   assert.deepEqual(names('AH Geraspte kaas'), [], 'geraspt ≠ rasp');
 });
 
+test('aanbieding koppelen: ander soort product valt af (vochtig, gemarineerd)', () => {
+  const { memory, lines } = storeAll([
+    ...buys('Page Toiletpapier 12 rollen', [['2026-10-01', 1, 649], ['2026-10-15', 1, 649]], 'ah'),
+    ...buys('AH Scharrel kipfilet 2 stuks', [['2026-10-01', 1, 449]], 'ah'),
+  ]);
+  const brands = brandsByProduct(lines);
+  const names = (title) => matchOffer({ title }, memory.products, brands).map((m) => memory.products.get(m.productId).name);
+  assert.deepEqual(names('Edet vochtig toiletpapier maxi pack'), []);
+  assert.deepEqual(names('AH Scharrel kipfilet gemarineerd'), []);
+  assert.equal(names('Page Kussenzacht toiletpapier 24 rollen').length, 1);
+  assert.equal(names('AH Scharrel kipfilet 600 g').length, 1);
+});
+
 test('weekoverzicht: inslagadvies, vast product, schijnkorting en verlopen actie', () => {
   const s = offerScenario();
   const entry = { id: 'tp', name: 'Toiletpapier', location: 'kast', maxWeeks: 12, members: [{ productId: s.tp, role: 'standaard' }] };

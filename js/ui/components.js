@@ -94,3 +94,16 @@ export function rhythmLabel(r) {
   if (r.status === 'ritme') return r.inPromoNow ? 'nu in de aanbieding' : r.weeksUntil <= 1 ? `aanbieding verwacht ${r.weeksUntil <= 0 ? 'deze' : 'volgende'} week` : `±elke ${Math.round(r.every)} weken in de aanbieding`;
   return '';
 }
+
+/** Klein i-knopje dat een uitleg opent (in plaats van lange tekstblokken op het scherm). */
+export function info(title, bodyHtml) {
+  return html`<button class="info-btn" data-action="info" data-title="${title}" data-body="${String(bodyHtml)}" aria-label="Uitleg: ${title}">i</button>`;
+}
+
+/** Sectiekop met optioneel i-knopje en een link rechts. */
+export function sectionHead(title, { infoTitle, infoBody, link, linkLabel, id } = {}) {
+  return html`<div class="section-head" ${id ? html`id="${id}"` : ''}>
+    <h2>${title}${infoBody ? html` ${info(infoTitle || title, infoBody)}` : ''}</h2>
+    ${link ? html`<a class="link" href="#/${link}">${linkLabel || 'Alles'}</a>` : ''}
+  </div>`;
+}
