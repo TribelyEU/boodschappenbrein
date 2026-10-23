@@ -1,0 +1,15 @@
+User-agent: * 
+
+# 1. Pagination
+Allow: /recepten/*?offset=
+Allow: /producten/*?offSet=
+
+# 2. Internal search
+Disallow: /producten/*?searchType=keyword&searchTerms=
+Disallow: /recepten/*?searchTerms=
+
+# 3. Log-in / personal pages
+Disallow: /mandje/
+Disallow: /mijn/
+Disallow: /bestellingen/
+Disallow: /recepten/favorieten/categorieen/
