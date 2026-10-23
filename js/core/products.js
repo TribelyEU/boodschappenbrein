@@ -152,10 +152,12 @@ export function aliasKey(rawName) {
 export function displayName(rawName) {
   const size = parseSize(rawName);
   let text = (size ? size.rest : rawName).trim();
+  // Alleen huismerken (AH, Jumbo, …) weglaten; een A-merk hoort bij de naam ("Calvé pindakaas", "Coca-Cola zero").
   const brand = detectBrand(text);
-  if (brand.length) text = text.split(/\s+/).slice(brand.length).join(' ');
-  text = text.replace(/\s+/g, ' ').trim();
-  const words = normalizeText(text).split(' ').filter(Boolean).map((w) => (ABBREVIATIONS[w] && ABBREVIATIONS[w].length > w.length ? ABBREVIATIONS[w] : w));
+  let norm = normalizeText(String(text).replace(/\+/g, ' plus ')).split(' ').filter(Boolean);
+  if (brand.length && brand.house) norm = norm.slice(brand.length);
+  text = norm.join(' ');
+  const words = text.split(' ').filter(Boolean).map((w) => (ABBREVIATIONS[w] && ABBREVIATIONS[w].length > w.length ? ABBREVIATIONS[w] : w));
   const label = words.map((w) => (w === 'halfvol' ? 'halfvolle' : w)).join(' ');
   return label ? label.charAt(0).toUpperCase() + label.slice(1) : titleCase(rawName);
 }

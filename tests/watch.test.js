@@ -5,6 +5,7 @@ import { DEFAULT_WATCHLIST, matchesWatch, offerUnitPrice, watchOffers, learned, 
 import { buyingInterval, dueRepeaters, repeaterCandidates } from '../js/core/repeat.js';
 
 const W = Object.fromEntries(DEFAULT_WATCHLIST.map((w) => [w.id, w]));
+const PK = { ...W.pindakaas, unit: 'kilo' }; // pindakaas per kilo vergelijken (standaard: per pot)
 const m = (id, title, extra = {}) => matchesWatch(W[id], { title, ...extra });
 
 test('volglijst: brede soort, uitzonderingen en woordbegin', () => {
@@ -47,7 +48,7 @@ test('prijs per eenheid: per kilo, per liter, multipack, x voor, zonder inhoud',
 });
 
 test('leren van oordelen: koopje en duur', () => {
-  const item = W.pindakaas;
+  const item = PK;
   const offers = [
     { store: 'ah', title: 'Calvé pindakaas 350 gram', mechanism: '2 VOOR 4.99', validTo: '2026-10-25' }, // 7,14/kg
     { store: 'lidl', title: 'Pindakaas 600 gram', price: 299, mechanism: 'voor 2,99', validTo: '2026-10-25' }, // 4,98/kg
@@ -82,7 +83,7 @@ test('verlopen en nog niet begonnen acties tellen niet mee', () => {
 test('historie: laagste prijs en hoe vaak het per winkel terugkomt', () => {
   const o = (store, price) => ({ store, title: 'Pindakaas 350 gram', price, mechanism: `voor ${(price / 100).toFixed(2).replace('.', ',')}` });
   const history = { weeks: { '2026-35': [o('ah', 199)], '2026-38': [o('ah', 229), o('lidl', 149)], '2026-41': [o('ah', 219)], '2026-44': [o('ah', 199)] } };
-  const h = watchHistory(W.pindakaas, history, { today: '2026-10-30', exceptWeek: '2026-44' });
+  const h = watchHistory(PK, history, { today: '2026-10-30', exceptWeek: '2026-44' });
   assert.equal(h.lowest.perUnit, 426);
   assert.equal(h.lowest.store, 'lidl');
   const ah = h.rhythm.find((r) => r.store === 'ah');
@@ -107,12 +108,12 @@ test('eigen aankoop als referentie (per kilo bij bekende inhoud)', () => {
     { productId: 'p1', name: 'Calvé pindakaas 600g', net: 449, qty: 1, sizeAmount: 600, sizeUnit: 'g', date: '2026-09-01', store: 'ah' },
     { productId: 'p1', name: 'Calvé pindakaas 600g', net: 399, qty: 1, sizeAmount: 600, sizeUnit: 'g', date: '2026-10-01', store: 'ah', promo: true },
   ];
-  const own = ownLastPurchase(W.pindakaas, facts, new Map([['p1', { name: 'Pindakaas' }]]));
+  const own = ownLastPurchase(PK, facts, new Map([['p1', { name: 'Pindakaas' }]]));
   assert.deepEqual([own.date, own.perUnit, own.perPack], ['2026-10-01', 665, 399]);
 });
 
 test('nieuw volgproduct', () => {
-  assert.deepEqual(newWatchItem('Koffiecups', 'stuk'), { id: 'koffiecups', name: 'Koffiecups', terms: ['koffiecups'], exclude: [], unit: 'stuk' });
+  assert.deepEqual(newWatchItem('Koffiecups', 'stuk'), { id: 'koffiecups', name: 'Koffiecups', terms: ['koffiecups'], exclude: [], unit: 'stuk', ref: null, equiv: [], onlyEquiv: false });
 });
 
 test('hardlopers: gebruikelijke tussentijd en herinnering', () => {
@@ -129,4 +130,39 @@ test('hardlopers: gebruikelijke tussentijd en herinnering', () => {
   assert.equal(dueRepeaters({ repeaters: ['cups'], purchasesByProduct: p, today: '2026-10-22', snoozed: { cups: '2026-10-29' } }).length, 0, 'nu niet = een week stil');
   assert.equal(dueRepeaters({ repeaters: ['cups'], purchasesByProduct: p, today: '2026-10-22', onList: new Set(['cups']) }).length, 0);
   assert.deepEqual(repeaterCandidates(p, new Map([['cups', { name: 'Koffiecups' }], ['melk', { name: 'Melk' }]])).map((c) => c.productId), ['cups'], 'melk (elke 3-4 dagen) is geen hardloper');
+});
+
+test('vergelijkingseenheid per stuk (pot) en per stuk (tablet)', () => {
+  const pot = offerUnitPrice({ title: 'Alle Calvé pindakaas 350 gram', mechanism: '2 VOOR 4.99' }, 'verpakking');
+  assert.deepEqual([pot.perUnit, pot.packPrice], [250, 250], 'per pot');
+  const tab = offerUnitPrice({ title: 'Finish Quantum vaatwastabletten 40 stuks', price: 999, mechanism: 'voor 9,99' }, 'stuk');
+  assert.equal(tab.perUnit, 25, 'per tablet');
+  assert.equal(offerUnitPrice({ title: 'Finish', price: 999 }, 'tablet').perUnit, null, 'oude naam "tablet" werkt nog; zonder aantal geen prijs per stuk');
+});
+
+test('equivalenten: wat jullie nu kopen en gelijkwaardige huismerken', async () => {
+  const { equivalentOf, normalPriceIn, ownCandidates } = await import('../js/core/watch.js');
+  const item = { ...W['cola-zero'], ref: { name: 'AH Cola zero', store: 'ah' }, equiv: [{ name: 'Freeway cola zero', store: 'lidl' }, { name: 'Jumbo cola zero', store: 'jumbo' }] };
+  assert.equal(equivalentOf(item, { store: 'ah', title: 'AH Cola zero sugar 1,5 liter' }), 'ref');
+  assert.equal(equivalentOf(item, { store: 'lidl', title: 'Freeway Cola Zero 1,5L' }), 'equiv');
+  assert.equal(equivalentOf(item, { store: 'ah', title: 'Freeway Cola Zero' }), null, 'winkel moet kloppen');
+  assert.equal(equivalentOf(item, { store: 'jumbo', title: 'Coca-Cola zero 1,5 liter' }), null);
+  const only = watchOffers({ ...item, onlyEquiv: true }, [
+    { store: 'lidl', title: 'Freeway Cola Zero', size: '1,5 l', price: 79, validTo: '2026-10-27' },
+    { store: 'jumbo', title: 'Coca-Cola', size: '1,5 l', price: 199, validTo: '2026-10-27' },
+  ], { today: '2026-10-23' });
+  assert.deepEqual(only.offers.map((x) => x.offer.store), ['lidl'], 'alleen gelijkwaardige tonen');
+  assert.equal(only.offers[0].perUnit, 53);
+  // normale prijs uit de bonnen omrekenen naar de eenheid
+  assert.deepEqual(normalPriceIn(item, { observations: 3, perBase: true, unitLabel: 'liter', typical: 100, packPrice: 150, packSize: { amount: 1500, unit: 'ml' } }), { perUnit: 100, per: 'liter' });
+  assert.deepEqual(normalPriceIn(item, { observations: 3, perBase: false, unitLabel: 'verpakking', typical: 150, packPrice: 150, packSize: { amount: 1500, unit: 'ml' } }), { perUnit: 100, per: 'liter' });
+  assert.deepEqual(normalPriceIn(item, { observations: 2, perBase: false, typical: 150, packPrice: 150, packSize: null }), { perPack: 150, per: 'verpakking' });
+  const facts = [
+    { productId: 'a', name: 'AH COLA ZERO', gross: 150, store: 'ah', date: '2026-10-01' },
+    { productId: 'a', name: 'AH COLA ZERO', gross: 150, store: 'ah', date: '2026-10-08' },
+    { productId: 'b', name: 'Coca-Cola zero 1.5l', gross: 245, store: 'lidl', date: '2026-08-23' },
+    { productId: 'c', name: 'Halfvolle melk', gross: 109, store: 'ah', date: '2026-10-08' },
+  ];
+  const cands = ownCandidates(item, facts, new Map([['a', { name: 'Cola zero' }], ['b', { name: 'Coca-Cola zero' }], ['c', { name: 'Halfvolle melk' }]]));
+  assert.deepEqual(cands.map((c) => [c.productId, c.store, c.count]), [['a', 'ah', 2], ['b', 'lidl', 1]]);
 });

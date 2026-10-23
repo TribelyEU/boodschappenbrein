@@ -169,7 +169,8 @@ function parseSegment(seg, opts) {
     }
     m = l.match(RE_ITEM);
     if (m && /[a-z]{2,}/i.test(m[1])) {
-      const name = m[1].replace(/\s{2,}/g, ' ').trim();
+      // OCR leest de 'l' van een inhoud vaak als 1: "Coca-Cola zero 1.51" is 1.5l
+      const name = m[1].replace(/\s{2,}/g, ' ').trim().replace(/\b([0-2][.,][0-9])1$/, '$1l');
       const qty = m[2] ? +m[2] : 1;
       const unit = m[3] ? parseAmount(m[3]) : parseAmount(m[4]);
       let amount = parseAmount(m[4]);

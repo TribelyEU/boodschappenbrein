@@ -6,7 +6,7 @@ import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { addDays, formatDate } from '../../core/dates.js';
 import { dueRepeaters, repeaterCandidates } from '../../core/repeat.js';
-import { dealForListItem, WATCH_UNITS } from '../../core/watch.js';
+import { dealForListItem, unitOf } from '../../core/watch.js';
 import { matchOffer } from '../../core/offers.js';
 import { productTokens } from '../../core/products.js';
 
@@ -45,7 +45,7 @@ function dealFor(it) {
 function dealLine(deal) {
   if (!deal) return '';
   const o = deal.offer;
-  const unit = deal.watch ? (WATCH_UNITS[deal.watch.unit] || WATCH_UNITS.stuk).label : null;
+  const unit = deal.watch ? unitOf(deal.watch).label : null;
   const what = o.mechanism || (deal.packPrice != null ? `voor ${euro(deal.packPrice)}` : 'aanbieding');
   const per = deal.perUnit != null && unit ? ` · ${euro(deal.perUnit)} per ${unit}` : '';
   return html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} ${storeName(o.store)}: ${what}${per}${deal.count > 1 ? ` · nog ${deal.count - 1} andere` : ''}</div>`;

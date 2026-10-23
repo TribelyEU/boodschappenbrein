@@ -9,26 +9,34 @@ import { normalizeText } from './text.js';
 import { parseMechanism, offerSize } from './offers.js';
 import { effectiveDeal } from './stockpile.js';
 import { isoWeek } from './dates.js';
+import { detectBrand } from './products.js';
 
-/** Eenheden: welke inhoud (g/ml/st) en hoe heet één eenheid. */
+/**
+ * Vergelijkingseenheden. base = welke inhoud uit de aanbieding nodig is (g/ml/st); null = per verpakking.
+ * choice = tekst in de keuzelijst, label = korte tekst achter de prijs ("€ 1,79 per liter").
+ */
 export const WATCH_UNITS = {
-  kilo: { base: 'g', per: 1000, label: 'kilo' },
-  liter: { base: 'ml', per: 1000, label: 'liter' },
-  rol: { base: 'st', per: 1, label: 'rol' },
-  tablet: { base: 'st', per: 1, label: 'tablet' },
-  wasbeurt: { base: 'st', per: 1, label: 'wasbeurt' },
-  stuk: { base: 'st', per: 1, label: 'stuk' },
+  kilo: { base: 'g', per: 1000, label: 'kilo', choice: 'per kilo' },
+  liter: { base: 'ml', per: 1000, label: 'liter', choice: 'per liter' },
+  wasbeurt: { base: 'st', per: 1, label: 'wasbeurt', choice: 'per wasbeurt' },
+  rol: { base: 'st', per: 1, label: 'rol', choice: 'per rol' },
+  stuk: { base: 'st', per: 1, label: 'stuk', choice: 'per stuk (tablet, cup, ei)' },
+  verpakking: { base: null, per: 1, label: 'stuk', choice: 'per stuk (pot, pak, fles)' },
 };
+/** Oudere namen van eenheden. */
+const UNIT_ALIASES = { tablet: 'stuk' };
+export const unitKeyOf = (item) => (WATCH_UNITS[item?.unit] ? item.unit : UNIT_ALIASES[item?.unit] || 'stuk');
+export const unitOf = (item) => WATCH_UNITS[unitKeyOf(item)];
 
 /** Startlijst. Zoekwoorden: een woord telt ook als begin van een langer woord ("vaatwastablet" → "vaatwastabletten"). */
 export const DEFAULT_WATCHLIST = [
   { id: 'toiletpapier', name: 'Toiletpapier', terms: ['toiletpapier', 'wc papier'], exclude: ['vochtig'], unit: 'rol' },
   { id: 'cola-zero', name: 'Cola zero', terms: ['coca cola', 'cola zero', 'pepsi max'], exclude: ['katja', 'snoep', 'drop'], unit: 'liter' },
   { id: 'belegen-kaas', name: 'Belegen kaas', terms: ['belegen'], exclude: ['jong belegen', 'extra belegen'], unit: 'kilo' },
-  { id: 'pindakaas', name: 'Pindakaas', terms: ['pindakaas'], exclude: [], unit: 'kilo' },
+  { id: 'pindakaas', name: 'Pindakaas', terms: ['pindakaas'], exclude: [], unit: 'verpakking' },
   { id: 'bier', name: 'Heineken / Hertog Jan / Leffe blond', terms: ['heineken', 'hertog jan', 'leffe blond', 'leffe'], exclude: ['heineken 0.0', '0.0 heineken', 'hertog jan 0.0', 'tripel', 'weizener', 'radler'], unit: 'liter' },
   { id: 'wasmiddel', name: 'Wasmiddel', terms: ['wasmiddel', 'wascapsules', 'wasparels', 'waspods'], exclude: ['wasverzachter', 'handwas'], unit: 'wasbeurt' },
-  { id: 'vaatwastabletten', name: 'Vaatwastabletten', terms: ['vaatwastablet', 'vaatwascapsule', 'vaatwasmiddel'], exclude: ['glansspoel', 'zout', 'reiniger', 'machinereiniger'], unit: 'tablet' },
+  { id: 'vaatwastabletten', name: 'Vaatwastabletten', terms: ['vaatwastablet', 'vaatwascapsule', 'vaatwasmiddel'], exclude: ['glansspoel', 'zout', 'reiniger', 'machinereiniger'], unit: 'stuk' },
   { id: 'gehakt', name: 'Gehakt', terms: ['gehakt', 'rundergehakt', 'kipgehakt', 'half om half'], exclude: ['gehaktbal', 'balletjes', 'gehaktschnitzel'], unit: 'kilo' },
   { id: 'kipfilet', name: 'Kipfilet', terms: ['kipfilet', 'kipfilets'], exclude: ['gerookt', 'vleeswaren', 'beleg', 'salade'], unit: 'kilo' },
   { id: 'zalmfilet', name: 'Zalmfilet', terms: ['zalmfilet', 'zalm'], exclude: ['gerookt', 'salade', 'spread', 'sushi'], unit: 'kilo' },
@@ -73,7 +81,7 @@ export function discountOf(deal, was = null) {
 }
 
 export function offerUnitPrice(offer, unitKey) {
-  const unit = WATCH_UNITS[unitKey] || WATCH_UNITS.stuk;
+  const unit = WATCH_UNITS[unitKey] || WATCH_UNITS[UNIT_ALIASES[unitKey]] || WATCH_UNITS.stuk;
   const deal = parseMechanism(offer.mechanism, offer) || (offer.price != null ? { type: 'prijs', price: offer.price } : null);
   if (!deal) return { deal: null, discount: null };
   const discount = discountOf(deal, offer.was ?? null);
@@ -88,6 +96,7 @@ function unitPriceOf(offer, unit, deal) {
   const eff = effectiveDeal(deal, normal ?? 0);
   const { size } = offerSize(offer);
   const packPrice = eff.unitPrice;
+  if (unit.base == null) return { deal, eff, packPrice, perUnit: packPrice, size: size || null, units: 1 };
   if (!size || size.unit !== unit.base) return { deal, eff, packPrice, perUnit: null, size: size || null };
   const units = size.amount / unit.per;
   return { deal, eff, packPrice, size, units, perUnit: units > 0 ? Math.round(packPrice / units) : null };
@@ -147,10 +156,14 @@ export function watchOffers(item, offers, { today, ratings = [], stores = null }
     if (o.validTo && o.validTo < today) continue;
     if (o.validFrom && o.validFrom > today) continue;
     if (!matchesWatch(item, o)) continue;
-    const u = offerUnitPrice(o, item.unit);
+    const eq = equivalentOf(item, o);
+    if (item.onlyEquiv && hasEquivalents(item) && !eq) continue;
+    const u = offerUnitPrice(o, unitKeyOf(item));
     const key = offerKey(o);
     const rating = mine.find((r) => r.key === key) || null;
-    out.push({ offer: o, key, ...u, rating, label: labelFor(u, L) });
+    // Het eigen oordeel telt niet mee voor het label van dezelfde aanbieding (anders is alles wat je aantikt een 'koopje').
+    const Lx = rating ? learned(mine.filter((r) => r.key !== key), item.id) : L;
+    out.push({ offer: o, key, ...u, rating, label: labelFor(u, Lx), equiv: eq });
   }
   // Goedkoopste per eenheid eerst; zonder eenheidsprijs achteraan
   out.sort((a, b) => (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity) || (a.packPrice ?? Infinity) - (b.packPrice ?? Infinity));
@@ -176,7 +189,7 @@ export function watchHistory(item, history, { today, exceptWeek = null } = {}) {
       if (!byStore.has(o.store)) byStore.set(o.store, new Set());
       byStore.get(o.store).add(wk);
       if (wk === exceptWeek) continue;
-      const u = offerUnitPrice(o, item.unit);
+      const u = offerUnitPrice(o, unitKeyOf(item));
       if (u.perUnit != null && (!lowest || u.perUnit < lowest.perUnit)) lowest = { perUnit: u.perUnit, store: o.store, week: wk, title: o.title };
     }
   }
@@ -209,14 +222,14 @@ function weekNumber(wk) {
 export function newWatchItem(name, unit = 'stuk') {
   const clean = String(name || '').trim();
   const id = normalizeText(clean).replace(/\s+/g, '-') || `item-${Date.now()}`;
-  return { id, name: clean, terms: [normalizeText(clean)], exclude: [], unit: WATCH_UNITS[unit] ? unit : 'stuk' };
+  return { id, name: clean, terms: [normalizeText(clean)], exclude: [], unit: WATCH_UNITS[unit] ? unit : 'stuk', ref: null, equiv: [], onlyEquiv: false };
 }
 
 /**
  * Wat jullie zelf voor dit soort product betaalden (uit de bonnen): de laatste aankoop, per eenheid als de inhoud bekend is.
  */
 export function ownLastPurchase(item, facts, products = new Map()) {
-  const unit = WATCH_UNITS[item.unit] || WATCH_UNITS.stuk;
+  const unit = unitOf(item);
   let last = null;
   for (const f of facts || []) {
     if (!f.productId || !(f.net > 0)) continue;
@@ -224,7 +237,8 @@ export function ownLastPurchase(item, facts, products = new Map()) {
     if (!matchesWatch(item, { title: `${f.name} ${pname}` })) continue;
     if (last && f.date < last.date) continue;
     let perUnit = null;
-    if (f.weighed && unit.base === 'g') perUnit = Math.round(f.net / f.qty);
+    if (unit.base == null) perUnit = Math.round(f.net / (f.qty || 1));
+    else if (f.weighed && unit.base === 'g') perUnit = Math.round(f.net / f.qty);
     else if (f.sizeAmount && f.sizeUnit === unit.base) perUnit = Math.round(f.net / ((f.qty || 1) * (f.sizeAmount / unit.per)));
     last = { date: f.date, store: f.store, name: pname || f.name, perPack: Math.round(f.net / (f.qty || 1)), perUnit, promo: f.promo || f.discount < 0 };
   }
@@ -250,4 +264,59 @@ export function dealForListItem(name, { offers = [], watchlist = [], ratings = [
   const withPrice = hits.map((o) => ({ offer: o, ...offerUnitPrice(o, 'stuk') }));
   withPrice.sort((a, b) => (a.packPrice ?? Infinity) - (b.packPrice ?? Infinity));
   return { ...withPrice[0], count: hits.length };
+}
+
+// ---------- equivalenten: wat jullie nu kopen en wat daarmee gelijkwaardig is ----------
+
+const nameWords = (name) => normalizeText(String(name || '').replace(/-/g, ' ')).split(' ').filter((w) => w.length >= 2 && !/^\d/.test(w));
+
+/** Hoort deze aanbieding bij een equivalent (zelfde winkel als die is ingevuld, en alle woorden van de naam erin)? */
+function matchesEntry(entry, offer) {
+  if (!entry?.name) return false;
+  // Een A-merk (Coca-Cola, Calvé) is in elke winkel hetzelfde; een huismerk alleen in die winkel.
+  const brand = detectBrand(entry.name);
+  const anyStore = brand.brand && !brand.house;
+  if (entry.store && !anyStore && entry.store !== offer.store) return false;
+  const toks = norm(`${offer.brand || ''} ${offer.title} ${offer.size || ''}`).trim().split(' ');
+  const words = nameWords(entry.name);
+  return words.length > 0 && words.every((w) => toks.some((t) => t.startsWith(w)));
+}
+
+export const hasEquivalents = (item) => Boolean(item?.ref?.name || item?.equiv?.length);
+
+/** 'ref' als de aanbieding het product is dat jullie nu kopen, 'equiv' bij een gelijkwaardig product, anders null. */
+export function equivalentOf(item, offer) {
+  if (item?.ref && matchesEntry(item.ref, offer)) return 'ref';
+  if ((item?.equiv || []).some((e) => matchesEntry(e, offer))) return 'equiv';
+  return null;
+}
+
+/**
+ * Normale prijs (uit de bonnen) van een eigen product, in de eenheid van het volgproduct.
+ * priceStats komt uit stockpile.js (mediaan van de normale prijzen; perBase = per kilo/liter/stuk).
+ */
+export function normalPriceIn(item, stats) {
+  if (!stats?.observations) return null;
+  const unit = unitOf(item);
+  if (unit.base == null) return { perUnit: stats.packPrice ?? stats.typical, per: unit.label };
+  const baseOfStats = stats.unitLabel === 'kilo' ? 'g' : stats.unitLabel === 'liter' ? 'ml' : stats.unitLabel === 'stuk' ? 'st' : null;
+  if (stats.perBase && baseOfStats === unit.base) return { perUnit: stats.typical, per: unit.label };
+  if (stats.packSize?.amount && stats.packSize.unit === unit.base && stats.packPrice) return { perUnit: Math.round(stats.packPrice / (stats.packSize.amount / unit.per)), per: unit.label };
+  return { perPack: stats.packPrice ?? stats.typical, per: 'verpakking' };
+}
+
+/** Eigen producten die bij dit volgproduct passen (voor de keuzelijst), meest gekocht eerst. */
+export function ownCandidates(item, facts, products) {
+  const by = new Map();
+  for (const f of facts || []) {
+    if (!f.productId || !(f.gross > 0)) continue;
+    const p = products.get(f.productId);
+    if (!p || !matchesWatch(item, { title: `${f.name} ${p.name}` })) continue;
+    const c = by.get(f.productId) || { productId: f.productId, name: p.name, raw: f.name, stores: new Map(), count: 0, last: f.date };
+    c.count++;
+    c.stores.set(f.store, (c.stores.get(f.store) || 0) + 1);
+    if (f.date >= c.last) { c.last = f.date; c.raw = f.name; }
+    by.set(f.productId, c);
+  }
+  return [...by.values()].map((c) => ({ ...c, store: [...c.stores.entries()].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.count - a.count);
 }

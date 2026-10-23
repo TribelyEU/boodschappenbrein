@@ -786,11 +786,11 @@ test('weekoverzicht: inslagadvies, vast product, schijnkorting en verlopen actie
   ] };
   const res = weeklyAdvice(data, ctx, { stores: ['ah', 'kruidvat', 'jumbo'] });
   const keys = res.items.map((i) => `${i.offer.store}:${i.name}`);
-  assert.ok(keys.includes('kruidvat:Toiletpapier'), keys.join(', '));
+  assert.ok(keys.includes('kruidvat:Page toiletpapier'), keys.join(', '));
   assert.ok(keys.includes('ah:Halfvolle melk'), keys.join(', '));
   assert.ok(!keys.some((k) => k.includes('Wasmiddel')), 'schijnkorting valt af');
   assert.ok(!keys.some((k) => k.startsWith('jumbo')), 'verlopen actie valt af');
-  const tp = res.items.find((i) => i.name === 'Toiletpapier');
+  const tp = res.items.find((i) => i.name === 'Page toiletpapier');
   assert.equal(tp.kind, 'inslag');
   assert.ok(tp.qty >= 2 && tp.qty % 2 === 0);
   const melk = res.items.find((i) => i.name === 'Halfvolle melk');
