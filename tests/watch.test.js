@@ -113,7 +113,7 @@ test('eigen aankoop als referentie (per kilo bij bekende inhoud)', () => {
 });
 
 test('nieuw volgproduct', () => {
-  assert.deepEqual(newWatchItem('Koffiecups', 'stuk'), { id: 'koffiecups', name: 'Koffiecups', terms: ['koffiecups'], exclude: [], unit: 'stuk', ref: null, equiv: [], onlyEquiv: false });
+  assert.deepEqual(newWatchItem('Koffiecups', 'stuk'), { id: 'koffiecups', name: 'Koffiecups', terms: ['koffiecups'], exclude: [], unit: 'stuk', refs: [], equiv: [], onlyEquiv: false });
 });
 
 test('hardlopers: gebruikelijke tussentijd en herinnering', () => {
@@ -165,4 +165,13 @@ test('equivalenten: wat jullie nu kopen en gelijkwaardige huismerken', async () 
   ];
   const cands = ownCandidates(item, facts, new Map([['a', { name: 'Cola zero' }], ['b', { name: 'Coca-Cola zero' }], ['c', { name: 'Halfvolle melk' }]]));
   assert.deepEqual(cands.map((c) => [c.productId, c.store, c.count]), [['a', 'ah', 2], ['b', 'lidl', 1]]);
+});
+
+test('wat jullie nu kopen: meerdere producten (max 3), oude enkele keuze blijft werken', async () => {
+  const { refsOf, equivalentOf } = await import('../js/core/watch.js');
+  const bier = { ...W.bier, refs: [{ name: 'Leffe blond', store: 'ah' }, { name: 'Hertog Jan pils', store: 'ah' }, { name: 'Heineken pils', store: 'ah' }, { name: 'te veel', store: 'ah' }] };
+  assert.equal(refsOf(bier).length, 3);
+  assert.equal(equivalentOf(bier, { store: 'dirk', title: 'Hertog Jan pils' }), 'ref', 'A-merk: in elke winkel');
+  assert.equal(equivalentOf(bier, { store: 'lidl', title: 'Leffe Blond' }), 'ref');
+  assert.deepEqual(refsOf({ ref: { name: 'AH Cola zero', store: 'ah' } }), [{ name: 'AH Cola zero', store: 'ah' }]);
 });

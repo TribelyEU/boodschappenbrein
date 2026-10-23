@@ -6,7 +6,7 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS } from '../../core/watch.js';
 import { priceStats } from '../../core/stockpile.js';
 
 const hcache = { v: -1, map: new Map() };
@@ -29,7 +29,7 @@ function history(item) {
     hcache.map.set(item.id, {
       hist: state.history?.data ? watchHistory(item, state.history.data, { today: d.today, exceptWeek: weekKey(d.today) }) : null,
       own: ownLastPurchase(item, d.facts, state.products),
-      ref: item.ref ? { ...item.ref, price: priceOf(item.ref) } : null,
+      refs: refsOf(item).map((r) => ({ ...r, price: priceOf(r) })),
       equiv: (item.equiv || []).map((e) => ({ ...e, price: priceOf(e) })),
     });
   }
@@ -83,21 +83,25 @@ function offerRow(x, item) {
 
 /** Verschil met de normale prijs van wat jullie nu kopen (beide per dezelfde eenheid, uit de bonnen). */
 function vsRef(x, item) {
-  const ref = history(item).ref;
-  const rp = ref?.price?.perUnit;
-  if (rp == null || x.perUnit == null || x.equiv === 'ref' && x.perUnit === rp) return '';
+  const refs = history(item).refs.filter((r) => r.price?.perUnit != null);
+  if (!refs.length || x.perUnit == null) return '';
+  // Is de aanbieding één van jullie eigen producten, vergelijk dan met dát product; anders met het goedkoopste ervan.
+  const own = refs.find((r) => matchesEntry(r, x.offer));
+  const ref = own || [...refs].sort((a, b) => a.price.perUnit - b.price.perUnit)[0];
+  const rp = ref.price.perUnit;
   const diff = rp - x.perUnit;
-  if (Math.abs(diff) < 1) return html`<div class="tiny" style="margin-top:2px">Even duur als wat jullie nu kopen</div>`;
-  return html`<div class="tiny" style="margin-top:2px;font-weight:650;color:${diff > 0 ? 'var(--good)' : 'var(--warn)'}">${euro(Math.abs(diff))} per ${unitLabel(item)} ${diff > 0 ? 'goedkoper' : 'duurder'} dan wat jullie nu kopen (${euro(rp)})</div>`;
+  const what = own ? 'wat jullie er normaal voor betalen' : refs.length > 1 ? `${ref.name}, het goedkoopste wat jullie kopen` : 'wat jullie nu kopen';
+  if (Math.abs(diff) < 1) return html`<div class="tiny" style="margin-top:2px">Even duur als ${what}</div>`;
+  return html`<div class="tiny" style="margin-top:2px;font-weight:650;color:${diff > 0 ? 'var(--good)' : 'var(--warn)'}">${euro(Math.abs(diff))} per ${unitLabel(item)} ${diff > 0 ? 'goedkoper' : 'duurder'} dan ${what} (${euro(rp)})</div>`;
 }
 
 /** Wat jullie nu kopen en de gelijkwaardige producten, met hun normale prijs uit de bonnen. */
 function equivBlock(item) {
-  const { ref, equiv } = history(item);
-  if (!ref && !equiv.length) return html`<button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="margin:2px 0 4px">${icon('plus', 14)}Kies wat jullie nu kopen</button>`;
+  const { refs, equiv } = history(item);
+  if (!refs.length && !equiv.length) return html`<button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="margin:2px 0 4px">${icon('plus', 14)}Kies wat jullie nu kopen</button>`;
   const price = (e) => (e.price?.perUnit != null ? `${euro(e.price.perUnit)} per ${unitLabel(item)}` : e.price?.perPack != null ? `${euro(e.price.perPack)} per verpakking` : e.productId ? 'prijs onbekend' : 'nog niet gekocht');
   return html`<div class="small" style="background:var(--surface-2);border-radius:10px;padding:8px 10px;margin:4px 0 6px">
-    ${ref ? html`<div><strong>Jullie kopen:</strong> ${ref.name}${ref.store ? ` (${storeName(ref.store)})` : ''} · ${price(ref)}</div>` : ''}
+    ${refs.length ? html`<div><strong>Jullie kopen:</strong></div>${refs.map((r) => html`<div>${r.name}${r.store ? ` (${storeName(r.store)})` : ''} · ${price(r)}</div>`)}` : ''}
     ${equiv.map((e) => html`<div class="muted">Gelijkwaardig: ${e.name}${e.store ? ` (${storeName(e.store)})` : ''} · ${price(e)}</div>`)}
     <button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="padding:2px 0;margin-top:2px">Wijzig</button>
   </div>`;
@@ -319,9 +323,10 @@ function equivEditor(w) {
   const cands = ownCandidates(w, derived().facts, state.products);
   const opt = (c) => `<option value="${esc(c.productId)}">${esc(c.name)} · ${esc(storeName(c.store))} (${c.count}×)</option>`;
   return `<div style="border-top:1px solid var(--line);padding-top:10px">
-    <strong>Wat jullie nu kopen</strong>
+    <strong>Wat jullie nu kopen</strong> <span class="tiny muted">(maximaal ${MAX_REFS})</span>
     <p class="tiny muted" style="margin:2px 0 6px">Daar vergelijkt de app elke aanbieding mee, met de normale prijs uit jullie bonnen.</p>
-    <select class="input" data-ref><option value="">${w.ref ? 'Niets meer' : 'Kies uit jullie aankopen…'}</option>${cands.map((c) => `<option value="${esc(c.productId)}" ${w.ref?.productId === c.productId ? 'selected' : ''}>${esc(c.name)} · ${esc(storeName(c.store))} (${c.count}×)</option>`).join('')}</select>
+    ${refsOf(w).map((r, i) => `<div class="between small" style="padding:4px 0"><span>${esc(r.name)}${r.store ? ` · ${esc(storeName(r.store))}` : ''}</span><button type="button" class="icon-btn" data-refdel="${i}" aria-label="Verwijderen">${icon('trash', 16)}</button></div>`).join('')}
+    ${refsOf(w).length < MAX_REFS && cands.length ? `<select class="input" data-ref style="margin-top:4px"><option value="">${refsOf(w).length ? 'Nog een toevoegen…' : 'Kies uit jullie aankopen…'}</option>${cands.filter((c) => !refsOf(w).some((r) => r.productId === c.productId)).map(opt).join('')}</select>` : ''}
     ${!cands.length ? '<p class="tiny muted" style="margin:4px 0 0">Nog niets gevonden in jullie bonnen dat bij de zoekwoorden past.</p>' : ''}
     <div style="margin-top:12px"><strong>Gelijkwaardig</strong></div>
     <p class="tiny muted" style="margin:2px 0 6px">Huismerken of andere merken die voor jullie hetzelfde zijn, bijvoorbeeld Lidl Freeway cola zero naast AH cola zero.</p>
@@ -347,7 +352,15 @@ function wireEquiv(box, w, redraw) {
     const c = ownCandidates(w, derived().facts, state.products).find((x) => x.productId === pid);
     return c ? { productId: c.productId, name: c.name, store: c.store } : null;
   };
-  box.querySelector('[data-ref]')?.addEventListener('change', (e) => save({ ref: e.target.value ? entryFor(e.target.value) : null }));
+  box.querySelector('[data-ref]')?.addEventListener('change', (e) => {
+    const en = e.target.value && entryFor(e.target.value);
+    if (en) save({ refs: [...refsOf(w), en].slice(0, MAX_REFS), ref: null });
+  });
+  box.querySelectorAll('[data-refdel]').forEach((b) => b.addEventListener('click', () => {
+    const refs = [...refsOf(w)];
+    refs.splice(+b.dataset.refdel, 1);
+    save({ refs, ref: null });
+  }));
   box.querySelector('[data-eqpick]')?.addEventListener('change', (e) => {
     const en = e.target.value && entryFor(e.target.value);
     if (en && !(w.equiv || []).some((x) => x.productId === en.productId)) save({ equiv: [...(w.equiv || []), en] });

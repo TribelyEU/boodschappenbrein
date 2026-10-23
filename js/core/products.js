@@ -14,6 +14,7 @@ export const HOUSE_BRANDS = [
   ['crownfield', 'Crownfield'], ['chef select', 'Chef Select'], ['alesto', 'Alesto'], ['freshona', 'Freshona'],
   ['milsani', 'Milsani'], ['lacura', 'Lacura'], ['river', 'River'], ['golden bridge', 'Golden Bridge'],
   ['euroshopper', 'Euroshopper'], ['bio+', 'Bio+'], ['bio plus', 'Bio+'], ['perlenbacher', 'Perlenbacher'],
+  ['freeway', 'Freeway'], ['bellarom', 'Bellarom'], ['w5', 'W5'], ['formil', 'Formil'], ['tandil', 'Tandil'], ['floralys', 'Floralys'], ['cien', 'Cien'], ['nixe', 'Nixe'], ['ncc', 'NCC'], ['dirk', 'Dirk'], ['g woon', "g'woon"],
 ];
 
 export const A_BRANDS = [
@@ -155,7 +156,8 @@ export function displayName(rawName) {
   // Alleen huismerken (AH, Jumbo, …) weglaten; een A-merk hoort bij de naam ("Calvé pindakaas", "Coca-Cola zero").
   const brand = detectBrand(text);
   let norm = normalizeText(String(text).replace(/\+/g, ' plus ')).split(' ').filter(Boolean);
-  if (brand.length && brand.house) norm = norm.slice(brand.length);
+  // Alleen de winkelnaam als merk weglaten ("AH Halfvolle melk" → "Halfvolle melk"); "Freeway", "NCC" blijven staan.
+  if (brand.length && brand.house && /^(AH|Jumbo|PLUS|Dirk|Hoogvliet|SPAR|Coop|Vomar|Deka)( |$)/.test(brand.brand)) norm = norm.slice(brand.length);
   text = norm.join(' ');
   const words = text.split(' ').filter(Boolean).map((w) => (ABBREVIATIONS[w] && ABBREVIATIONS[w].length > w.length ? ABBREVIATIONS[w] : w));
   const label = words.map((w) => (w === 'halfvol' ? 'halfvolle' : w)).join(' ');

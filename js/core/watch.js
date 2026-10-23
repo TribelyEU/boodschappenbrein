@@ -222,7 +222,7 @@ function weekNumber(wk) {
 export function newWatchItem(name, unit = 'stuk') {
   const clean = String(name || '').trim();
   const id = normalizeText(clean).replace(/\s+/g, '-') || `item-${Date.now()}`;
-  return { id, name: clean, terms: [normalizeText(clean)], exclude: [], unit: WATCH_UNITS[unit] ? unit : 'stuk', ref: null, equiv: [], onlyEquiv: false };
+  return { id, name: clean, terms: [normalizeText(clean)], exclude: [], unit: WATCH_UNITS[unit] ? unit : 'stuk', refs: [], equiv: [], onlyEquiv: false };
 }
 
 /**
@@ -271,22 +271,25 @@ export function dealForListItem(name, { offers = [], watchlist = [], ratings = [
 const nameWords = (name) => normalizeText(String(name || '').replace(/-/g, ' ')).split(' ').filter((w) => w.length >= 2 && !/^\d/.test(w));
 
 /** Hoort deze aanbieding bij een equivalent (zelfde winkel als die is ingevuld, en alle woorden van de naam erin)? */
-function matchesEntry(entry, offer) {
+export function matchesEntry(entry, offer) {
   if (!entry?.name) return false;
-  // Een A-merk (Coca-Cola, Calvé) is in elke winkel hetzelfde; een huismerk alleen in die winkel.
-  const brand = detectBrand(entry.name);
-  const anyStore = brand.brand && !brand.house;
+  // Een huismerk (AH, Jumbo, …) geldt alleen in die winkel; een merk (Coca-Cola, Hertog Jan) in elke winkel.
+  const anyStore = !detectBrand(entry.name).house;
   if (entry.store && !anyStore && entry.store !== offer.store) return false;
   const toks = norm(`${offer.brand || ''} ${offer.title} ${offer.size || ''}`).trim().split(' ');
   const words = nameWords(entry.name);
   return words.length > 0 && words.every((w) => toks.some((t) => t.startsWith(w)));
 }
 
-export const hasEquivalents = (item) => Boolean(item?.ref?.name || item?.equiv?.length);
+/** Wat jullie nu kopen: maximaal 3 producten (eerdere versies hadden er één, in item.ref). */
+export const MAX_REFS = 3;
+export const refsOf = (item) => (item?.refs?.length ? item.refs : item?.ref ? [item.ref] : []).slice(0, MAX_REFS);
+
+export const hasEquivalents = (item) => Boolean(refsOf(item).length || item?.equiv?.length);
 
 /** 'ref' als de aanbieding het product is dat jullie nu kopen, 'equiv' bij een gelijkwaardig product, anders null. */
 export function equivalentOf(item, offer) {
-  if (item?.ref && matchesEntry(item.ref, offer)) return 'ref';
+  if (refsOf(item).some((r) => matchesEntry(r, offer))) return 'ref';
   if ((item?.equiv || []).some((e) => matchesEntry(e, offer))) return 'equiv';
   return null;
 }
