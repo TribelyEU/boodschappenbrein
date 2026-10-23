@@ -6,7 +6,7 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch } from '../../core/watch.js';
 import { parseSize, detectBrand } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
@@ -79,6 +79,8 @@ function offerRow(x, item) {
       <div class="small" style="white-space:normal;color:var(--ink-2)">${o.title}</div>
       <div class="tiny muted" style="white-space:normal;margin-top:2px">${details(x)}${facts.length ? ` · ${facts.join(' · ')}` : ''}</div>
       ${vsRef(x, item)}
+      ${x.choice ? html`<div class="tiny" style="margin-top:3px">Gekozen: <strong>${x.choice.name || x.choice.sizeText}</strong>${x.choice.normal ? ` (normaal ${euro(x.choice.normal)})` : ''} · <a href="#" data-action="choose" data-key="${x.key}" data-w="${item.id}">wijzig</a></div>`
+        : x.perUnit == null && unitOf(item).base ? html`<button class="btn small ghost" data-action="choose" data-key="${x.key}" data-w="${item.id}" style="padding:2px 0;margin-top:2px">Kies welke je zou nemen</button>` : ''}
     </div>
     <div style="text-align:right;min-width:72px">${priceBlock(x, item)}</div>
     <div style="width:100%;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
@@ -198,6 +200,7 @@ export default {
     swipe() { swipeSheet(); },
     editList() { editSheet(); },
     editItem(el) { editSheet(el.dataset.w); },
+    choose(el) { chooseSheet(el.dataset.key, el.dataset.w); },
   },
 };
 
@@ -474,4 +477,92 @@ async function showSuggestions(box, w, save) {
   };
   if (resume) { draw(sugState.title); return; }
   draw(`Voorstellen voor “${esc(query)}”${size ? ` (${size.unit === 'g' ? `${size.amount} g` : size.unit === 'ml' ? `${size.amount / 1000} l`.replace('.', ',') : `${size.amount} st.`})` : ''}`);
+}
+
+// ---------- variant kiezen bij een aanbieding ----------
+async function saveChoice(key, choice) {
+  const all = { ...(state.settings.offerChoices || {}) };
+  if (choice) all[key] = choice; else delete all[key];
+  // Oude keuzes (verlopen acties) opruimen: de sleutel bevat de einddatum
+  const today = derived().today;
+  for (const k of Object.keys(all)) { const end = k.split('|').pop(); if (end && end < today) delete all[k]; }
+  await setSetting('offerChoices', all);
+}
+
+async function chooseSheet(key, watchId) {
+  const g = derived().koopjes.find((k) => k.item.id === watchId);
+  const x = g?.offers.find((o) => o.key === key);
+  if (!x) return;
+  const item = g.item;
+  const o = x.offer;
+  const { sizeOptionsOf } = await import('../../core/watch.js');
+  const unit = unitOf(item);
+  const sizeLbl = (sz) => (sz.unit === 'g' ? (sz.amount >= 1000 ? `${String(sz.amount / 1000).replace('.', ',')} kg` : `${sz.amount} gram`) : sz.unit === 'ml' ? (sz.amount >= 1000 ? `${String(sz.amount / 1000).replace('.', ',')} liter` : `${sz.amount} ml`) : `${sz.amount} stuks`);
+  const opts = sizeOptionsOf(o).filter((sz) => sz.unit === unit.base);
+  const needsPrice = x.deal && x.deal.type !== 'prijs' && x.deal.type !== 'xvoor' && o.was == null;
+  const sheet = openSheet(`<h2>Welke zou je nemen?</h2>
+    <p class="small muted">${esc(storeName(o.store))} · ${esc(o.title)}${o.mechanism ? ` · ${esc(o.mechanism)}` : ''}</p>
+    ${opts.length && !needsPrice ? `<div class="small" style="margin-top:8px"><strong>Uit de actie</strong></div>
+      <div class="btn-row" style="margin-top:6px">${opts.map((sz, i) => `<button class="btn small" data-size="${i}">${esc(sizeLbl(sz))}</button>`).join('')}</div>` : ''}
+    <div class="small" style="margin-top:12px"><strong>Uit het assortiment van ${esc(storeName(o.store))}</strong>${needsPrice ? ' <span class="muted">(nodig: deze actie noemt geen prijs)</span>' : ''}</div>
+    <div data-list><p class="small muted"><span class="spinner"></span> Laden…</p></div>
+    <div class="small" style="margin-top:12px"><strong>Of vul zelf in</strong> <span class="muted">(bv. wat je in de app van de winkel ziet)</span></div>
+    <div class="gap8" style="margin-top:6px">
+      <input class="input" data-own-size placeholder="Inhoud, bv. 300 g" autocomplete="off" value="${esc(x.choice?.sizeText || '')}">
+      <input class="input num" data-own-price inputmode="decimal" placeholder="Normale prijs" style="width:120px" value="${x.choice?.normal ? (x.choice.normal / 100).toFixed(2).replace('.', ',') : ''}">
+      <button class="btn" data-own aria-label="Opslaan">${icon('check', 16)}</button>
+    </div>
+    <div class="btn-row" style="margin-top:12px;justify-content:space-between">${x.choice ? '<button class="btn danger small" data-clear>Keuze wissen</button>' : '<span></span>'}<button class="btn" data-close>Sluiten</button></div>`);
+  sheet.querySelector('[data-close]').onclick = closeSheet;
+  sheet.querySelector('[data-clear]')?.addEventListener('click', async () => { await saveChoice(key, null); closeSheet(); });
+  sheet.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', async () => {
+    const sz = opts[+b.dataset.size];
+    await saveChoice(key, { name: sizeLbl(sz), sizeText: sizeLbl(sz) });
+    closeSheet();
+    toast('Gekozen');
+  }));
+  sheet.querySelector('[data-own]').addEventListener('click', async () => {
+    const sizeText = sheet.querySelector('[data-own-size]').value.trim();
+    const p = sheet.querySelector('[data-own-price]').value.trim().replace(',', '.');
+    const normal = p ? Math.round(parseFloat(p) * 100) : null;
+    if (!sizeText && !normal) { toast('Vul de inhoud en/of de normale prijs in'); return; }
+    if (sizeText && !parseSize(sizeText)) { toast('Inhoud niet herkend; schrijf bijvoorbeeld 300 g of 1,5 liter'); return; }
+    await saveChoice(key, { name: sizeText || 'eigen invoer', sizeText, normal: Number.isFinite(normal) ? normal : null });
+    closeSheet();
+    toast('Gekozen');
+  });
+  const list = sheet.querySelector('[data-list]');
+  let A;
+  try { A = await getAssortment(); } catch (e) { list.innerHTML = `<p class="small muted">${esc(e.message)}</p>`; return; }
+  const { suggestEquivalents } = await import('../../core/assortment.js');
+  // Zoek op de actietitel zonder "Alle"/winkelnaam, en op het volgproduct zelf
+  const cleanTitle = o.title.replace(/^alle\s+/i, '').replace(/\*+$/, '');
+  const seen = new Set();
+  const rows = [];
+  // "AH Gehakt 300 gram en AH Terra plantaardig rulgehakt 200 gram" → beide delen apart, plus de zoekwoorden van het volgproduct
+  const parts = cleanTitle.split(/\s+(?:en|of)\s+|,\s*/i).map((t) => t.trim()).filter((t) => t.length > 2);
+  for (const q of [...new Set([cleanTitle, ...parts, item.name, ...(item.terms || [])])]) {
+    for (const grp of suggestEquivalents(A.idx, q, { stores: [o.store], perStore: 8 })) {
+      for (const r of grp.results) {
+        if (seen.has(r.name + r.price)) continue;
+        if (!matchesWatch(item, { title: r.name })) continue; // geen gehaktballen bij "gehakt
+        if (unit.base && r.sizeUnit && r.sizeUnit !== unit.base && !(unit.base === 'st')) continue;
+        seen.add(r.name + r.price);
+        rows.push(r);
+      }
+    }
+  }
+  if (!rows.length) { list.innerHTML = '<p class="small muted">Niets gevonden in het assortiment van deze winkel.</p>'; return; }
+  // Producten met een inhoud die in de actie staat ("300 gram") eerst
+  const inOffer = (r) => sizeOptionsOf(o).some((sz) => sz.unit === r.sizeUnit && Math.abs(sz.amount - r.sizeAmount) <= 1);
+  rows.sort((a, b) => inOffer(b) - inOffer(a));
+  list.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="between small" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px">
+    <div style="min-width:0"><div>${esc(r.name)}</div><div class="tiny muted">${esc(r.sizeText || '')}${r.sizeText ? ' · ' : ''}normaal ${esc(euro(r.price))} (Checkjebon)</div></div>
+    <button class="btn small" data-pick="${i}">Deze</button></div>`).join('');
+  list.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
+    const r = rows[+b.dataset.pick];
+    await saveChoice(key, { name: r.name, sizeText: r.sizeText || (r.sizeAmount ? sizeLbl({ amount: r.sizeAmount, unit: r.sizeUnit }) : ''), normal: r.price });
+    closeSheet();
+    toast('Gekozen');
+  }));
 }

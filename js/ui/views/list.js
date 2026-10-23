@@ -37,7 +37,7 @@ function dealFor(it) {
     const key = productTokens(it.name).join(' ');
     const pseudo = key ? new Map([['x', { id: 'x', key, name: it.name }]]) : null;
     const matchByName = pseudo ? (o) => matchOffer(o, pseudo).length > 0 : null;
-    dcache.map.set(k, dealForListItem(it.name, { offers, watchlist: state.settings.watchlist || [], ratings: state.settings.ratings || [], today: d.today, stores: (state.settings.myStores || []).map((s) => s.id), matchByName }));
+    dcache.map.set(k, dealForListItem(it.name, { offers, watchlist: state.settings.watchlist || [], ratings: state.settings.ratings || [], choices: state.settings.offerChoices || {}, today: d.today, stores: (state.settings.myStores || []).map((s) => s.id), matchByName }));
   }
   return dcache.map.get(k);
 }

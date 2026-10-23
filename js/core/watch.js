@@ -6,7 +6,7 @@
 // interessant vonden en wat de laagste prijs in de bewaarde aanbiedingen was. Geen schattingen.
 
 import { normalizeText } from './text.js';
-import { parseMechanism, offerSize } from './offers.js';
+import { parseMechanism, offerSize, sizesIn } from './offers.js';
 import { effectiveDeal } from './stockpile.js';
 import { isoWeek } from './dates.js';
 import { detectBrand } from './products.js';
@@ -58,7 +58,8 @@ function hasPhrase(text, phrase) {
 export function matchesWatch(item, offer) {
   const text = norm(`${offer.brand || ''} ${offer.title} ${offer.size || ''}`);
   if (!(item.terms || []).some((t) => hasPhrase(text, t))) return false;
-  if ((item.exclude || []).some((t) => hasPhrase(text, t))) return false;
+  // Uitzondering van één woord telt ook midden in een woord ("gehaktbal" sluit ook "rundergehaktbal" uit)
+  if ((item.exclude || []).some((t) => hasPhrase(text, t) || (!/\s/.test(String(t).trim()) && String(t).trim().length >= 5 && text.includes(normalizeText(t))))) return false;
   return true;
 }
 
@@ -147,7 +148,7 @@ export function labelFor(u, L) {
  *  - label 'koopje': even goedkoop of goedkoper dan iets wat jullie eerder interessant vonden
  *  - label 'duur':   even duur of duurder dan iets wat jullie eerder niet interessant vonden (wordt ingeklapt)
  */
-export function watchOffers(item, offers, { today, ratings = [], stores = null } = {}) {
+export function watchOffers(item, offers, { today, ratings = [], stores = null, choices = {} } = {}) {
   const mine = (ratings || []);
   const L = learned(mine, item.id);
   const out = [];
@@ -158,12 +159,14 @@ export function watchOffers(item, offers, { today, ratings = [], stores = null }
     if (!matchesWatch(item, o)) continue;
     const eq = equivalentOf(item, o);
     if (item.onlyEquiv && hasEquivalents(item) && !eq) continue;
-    const u = offerUnitPrice(o, unitKeyOf(item));
     const key = offerKey(o);
+    // Zelf gekozen variant (bij "A of B" of als de inhoud/normale prijs ontbreekt)
+    const choice = choices?.[key] || null;
+    const u = offerUnitPrice(applyChoice(o, choice), unitKeyOf(item));
     const rating = mine.find((r) => r.key === key) || null;
     // Het eigen oordeel telt niet mee voor het label van dezelfde aanbieding (anders is alles wat je aantikt een 'koopje').
     const Lx = rating ? learned(mine.filter((r) => r.key !== key), item.id) : L;
-    out.push({ offer: o, key, ...u, rating, label: labelFor(u, Lx), equiv: eq });
+    out.push({ offer: o, key, ...u, rating, label: labelFor(u, Lx), equiv: eq, choice });
   }
   // Goedkoopste per eenheid eerst; zonder eenheidsprijs achteraan
   out.sort((a, b) => (a.perUnit ?? Infinity) - (b.perUnit ?? Infinity) || (a.packPrice ?? Infinity) - (b.packPrice ?? Infinity));
@@ -249,11 +252,11 @@ export function ownLastPurchase(item, facts, products = new Map()) {
  * Is dit lijstproduct deze week ergens in de aanbieding? Eerst via de volglijst (brede soort),
  * anders alleen bij een duidelijke naamovereenkomst. Geeft de beste aanbieding of null.
  */
-export function dealForListItem(name, { offers = [], watchlist = [], ratings = [], today, stores = null, matchByName = null }) {
+export function dealForListItem(name, { offers = [], watchlist = [], ratings = [], today, stores = null, matchByName = null, choices = {} }) {
   const asOffer = { title: name };
   const item = watchlist.find((w) => matchesWatch(w, asOffer));
   if (item) {
-    const r = watchOffers(item, offers, { today, ratings, stores });
+    const r = watchOffers(item, offers, { today, ratings, stores, choices });
     const usable = r.offers.filter((x) => x.label !== 'duur' && x.rating?.interesting !== false);
     const best = usable.find((x) => x.label === 'koopje') || usable[0];
     return best ? { ...best, watch: item, count: usable.length } : null;
@@ -335,4 +338,24 @@ export function entryPriceIn(item, entry) {
   if (sz?.amount && sz.unit === unit.base) return { perUnit: Math.round(entry.price / (sz.amount / unit.per)), per: unit.label };
   if (unit.base === 'st' && sz?.count > 1) return { perUnit: Math.round(entry.price / sz.count), per: unit.label };
   return { perPack: entry.price, per: 'verpakking' };
+}
+
+/**
+ * Een gekozen variant toepassen: de inhoud (en eventueel de normale prijs) van het gekozen product.
+ * choice: { name, sizeText, normal? } — normal = gewone winkelprijs van die variant (uit het assortiment), voor
+ * acties als "2e gratis" of "25% korting" die zelf geen prijs noemen.
+ */
+export function applyChoice(offer, choice) {
+  if (!choice) return offer;
+  return { ...offer, size: choice.sizeText || offer.size, title: offer.title, was: offer.was ?? choice.normal ?? null, chosen: choice.name || null };
+}
+
+/** Inhouden die in de actie zelf genoemd worden ("300 gram" en "200 gram"), om uit te kiezen. */
+export function sizeOptionsOf(offer) {
+  const out = [];
+  for (const src of [offer.size, offer.title]) {
+    const { options } = sizesIn(src);
+    for (const o of options) if (!out.some((x) => x.unit === o.unit && x.amount === o.amount)) out.push(o);
+  }
+  return out;
 }

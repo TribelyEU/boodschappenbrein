@@ -197,3 +197,16 @@ test('assortiment: voorstellen voor gelijkwaardige producten (zelfde inhoud, hui
   assert.equal(equivalentOf(item, { store: 'jumbo', title: 'Jumbo Cola Zero 1,5 liter' }), 'equiv', '"sugar" en inhoud hoeven niet in de titel');
   assert.deepEqual(entryPriceIn({ unit: 'stuk' }, { price: 349, size: { amount: 600, unit: 'g', count: 60 } }), { perUnit: 6, per: 'stuk' }, '60 x 10 g = 60 tabletten');
 });
+
+test('zelf gekozen variant: inhoud en normale prijs bij "A of B" en "2e gratis"', async () => {
+  const { applyChoice, sizeOptionsOf } = await import('../js/core/watch.js');
+  const o = { store: 'ah', title: 'Alle AH Gehakt 300 gram en AH Terra plantaardig rulgehakt 200 gram', mechanism: '2e GRATIS', validTo: '2026-10-25' };
+  assert.deepEqual(sizeOptionsOf(o).map((s) => s.amount), [300, 200]);
+  const r0 = watchOffers(W.gehakt, [o], { today: '2026-10-23' });
+  assert.equal(r0.offers[0].perUnit, null, 'zonder keuze geen kiloprijs');
+  const key = r0.offers[0].key;
+  const r = watchOffers(W.gehakt, [o], { today: '2026-10-23', choices: { [key]: { name: 'AH Rundergehakt', sizeText: '300 g', normal: 419 } } });
+  assert.equal(r.offers[0].packPrice, 210, '2e gratis van 4,19 = 2,10 per pak');
+  assert.equal(r.offers[0].perUnit, 700, '€ 2,10 voor 300 g = € 7,00 per kilo');
+  assert.equal(applyChoice(o, null), o);
+});

@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   ratings: [], // oordelen over aanbiedingen: { key, watchId, store, title, perUnit, discount, interesting, week, at }
   repeaters: [], // hardlopers: productId's waarvoor de lijst een herinnering geeft
   snoozed: {}, // productId → datum tot wanneer de herinnering stil is
+  offerChoices: {}, // aanbiedingssleutel → zelf gekozen variant { name, sizeText, normal }
 };
 
 export const state = {
@@ -208,7 +209,7 @@ export function derived() {
   const freezerUsed = [...freezer.values()].reduce((sum, f) => sum + f.packs, 0);
   const offerData = state.offers?.data || null;
   const stores = (state.settings.myStores || []).map((x) => x.id);
-  const koopjes = (state.settings.watchlist || []).map((item) => watchOffers(item, offerData?.offers || [], { today: t, ratings: state.settings.ratings, stores }));
+  const koopjes = (state.settings.watchlist || []).map((item) => watchOffers(item, offerData?.offers || [], { today: t, ratings: state.settings.ratings, stores, choices: state.settings.offerChoices || {} }));
   const offerStatus = offersStatus(offerData, t);
   Object.assign(cache, { version: state.version, facts, predictions, savings, rhythm, freezer, freezerUsed, koopjes, offerStatus, today: t, purchasesByProduct });
   return cache;
