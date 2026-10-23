@@ -22,12 +22,16 @@ for (const p of ['/robots.txt', '/sitemap_index.xml', '/wp-json/', '/wp-json/wp/
   await new Promise((res) => setTimeout(res, 800));
 }
 try {
-  const posts = JSON.parse(out['/wp-json/wp/v2/posts?per_page=3&_fields=id,link,title,date,categories,featured_media,yoast_head_json'].sample);
-  const link = posts[0]?.link;
-  if (link) {
-    const r = await get(link.replace(B, ''));
+  const sm = await get('/post-sitemap.xml');
+  const urls = [...sm.text.matchAll(/<url>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>)?/g)].map((m) => ({ loc: m[1], mod: m[2] }));
+  out.sitemap = { count: urls.length, first: urls.slice(0, 5), last: urls.slice(-5) };
+  const recent = [...urls].sort((x, y) => String(y.mod).localeCompare(String(x.mod))).slice(0, 2);
+  out.pages = [];
+  for (const u of recent) {
+    const r = await get(u.loc.replace(B, ''));
     const lds = [...r.text.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-    out.page = { link, status: r.status, ldCount: lds.length, ld: lds.map((s) => s.slice(0, 8000)), wprm: /wprm-recipe/.test(r.text), tasty: /tasty-recipes/.test(r.text) };
+    out.pages.push({ link: u.loc, status: r.status, size: r.text.length, ldCount: lds.length, ld: lds.map((s) => s.slice(0, 9000)), wprm: /wprm-recipe/.test(r.text), tasty: /tasty-recipes/.test(r.text) });
+    await new Promise((res) => setTimeout(res, 1500));
   }
 } catch (e) { out.pageError = e.message; }
 await mkdir(join(root, 'data', 'debug'), { recursive: true });
