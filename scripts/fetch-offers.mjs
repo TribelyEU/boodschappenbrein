@@ -90,10 +90,42 @@ async function main() {
   }
   const out = { app: 'Boodschappenbrein', version: 1, generatedAt: new Date().toISOString(), today, sources, offers };
   await writeFile(file, JSON.stringify(out));
+  await updateHistory(offers);
   log(`\nKlaar: ${total} aanbiedingen.`);
   for (const [s, v] of Object.entries(sources)) log(`  ${s.padEnd(10)} ${v.ok ? 'ok ' : 'NEE'} ${v.count ?? 0}${v.via ? ` via ${v.via}` : ''}${v.method ? ` (${v.method})` : ''}${v.error ? ` – ${v.error}` : ''}${v.note ? ` – ${v.note}` : ''}`);
   // Gedeeltelijk mislukt is geen fout (de app toont het per winkel); helemaal niets wel, zodat GitHub een melding mailt.
   if (!total) process.exitCode = 1;
+}
+
+/**
+ * Historie: per ISO-week alle aanbiedingen die die week voorbijkwamen (compact), maximaal 52 weken.
+ * Hiermee ziet de app "laagste prijs sinds …" en hoe vaak iets per winkel terugkomt. Alleen openbare folderinformatie.
+ */
+async function updateHistory(offers) {
+  const file = join(root, 'data', 'historie.json');
+  let hist = { app: 'Boodschappenbrein', version: 1, weeks: {} };
+  try { hist = JSON.parse(await readFile(file, 'utf8')); } catch { /* eerste keer */ }
+  const d = new Date(today + 'T12:00:00Z');
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const wn = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  const wk = `${d.getUTCFullYear()}-${String(wn).padStart(2, '0')}`;
+  const list = hist.weeks[wk] || [];
+  const seen = new Set(list.map((o) => o.id));
+  for (const o of offers) {
+    if (seen.has(o.id)) continue;
+    seen.add(o.id);
+    const c = { id: o.id, store: o.store, title: o.title };
+    for (const k of ['brand', 'size', 'price', 'was', 'mechanism', 'validFrom', 'validTo']) if (o[k] != null) c[k] = o[k];
+    list.push(c);
+  }
+  hist.weeks[wk] = list;
+  const keep = Object.keys(hist.weeks).sort().slice(-52);
+  hist.weeks = Object.fromEntries(keep.map((k) => [k, hist.weeks[k]]));
+  hist.updatedAt = new Date().toISOString();
+  await writeFile(file, JSON.stringify(hist));
+  log(`Historie: week ${wk} (${list.length} acties), ${keep.length} weken bewaard.`);
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; });

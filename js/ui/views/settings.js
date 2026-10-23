@@ -15,45 +15,22 @@ export default {
       <div class="stack">
         <div class="card">
           <h2>Gegevens</h2>
-          <p class="muted small">${state.receipts.length} bonnen · ${state.lines.length} regels · ${state.products.size} producten. Alles staat alleen in deze browser op dit apparaat${usage?.usage ? ` (${(usage.usage / 1048576).toFixed(1).replace('.', ',')} MB)` : ''}.
+          <p class="muted small">${state.receipts.length} bonnen · ${state.lines.length} regels · ${state.products.size} producten. Alles staat alleen op deze telefoon${usage?.usage ? ` (${(usage.usage / 1048576).toFixed(1).replace('.', ',')} MB)` : ''}.
           ${usage && usage.persisted === false ? html`<br><span style="color:var(--warn)">De browser heeft permanente opslag niet bevestigd. Maak regelmatig een back-up.</span>` : ''}</p>
           <div class="btn-row">
             <button class="btn primary" data-action="backup">${icon('import', 16)}Back-up downloaden</button>
             <label class="btn">Back-up terugzetten…<input type="file" accept=".json,application/json" class="sr-only" data-change="restore"></label>
           </div>
-          <p class="muted tiny" style="margin-bottom:0">De back-up bevat bonnen, producten, correcties, lijst, menu en instellingen (geen prijsdata; die is opnieuw op te halen).</p>
-        </div>
-
-        <div class="card">
-          <h2>Vakanties</h2>
-          <p class="muted small">Tijdens vakanties verbruikt u thuis niets; de voorraadvoorspelling houdt hier rekening mee.</p>
-          ${vac.length ? html`<div class="rows">${vac.map((v, i) => html`<div class="row-item"><div class="grow">${formatDate(v.from)} – ${formatDate(v.to)}</div><button class="icon-btn" data-action="delVac" data-i="${i}" aria-label="Verwijderen">${icon('trash', 18)}</button></div>`)}</div>` : ''}
-          <form class="gap8 wrap" data-submit="addVac" style="margin-top:8px">
-            <input class="input small" type="date" name="from" required style="width:auto"><span>t/m</span><input class="input small" type="date" name="to" required style="width:auto">
-            <button class="btn small">Toevoegen</button>
-          </form>
+          <p class="muted tiny" style="margin-bottom:0">De back-up bevat bonnen, producten, lijst, weekmenu, volglijst, jullie oordelen over aanbiedingen en instellingen. Zet hem op een andere telefoon terug om daar verder te gaan.</p>
         </div>
 
         <div class="card">
           <h2>Mijn winkels</h2>
-          <p class="muted small">Bij deze winkels houdt de app aanbiedingen in de gaten voor jullie inslaglijst.</p>
+          <p class="muted small">Van deze winkels zie je de aanbiedingen bij Koopjes en op de lijst.</p>
           <div class="qa" style="flex-wrap:wrap;margin-top:6px">${['ah', 'lidl', 'hoogvliet', 'jumbo', 'dirk', 'plus', 'aldi', 'kruidvat', 'etos', 'action', 'wibra'].map((id) => {
             const on = (state.settings.myStores || []).some((m) => m.id === id);
             return html`<button class="chip ${on ? 'good' : ''}" data-action="toggleMyStore" data-id="${id}">${on ? icon('check', 13) : ''}${storeName(id)}</button>`;
           })}</div>
-        </div>
-
-        <div class="card">
-          <h2>Aanbiedingen</h2>
-          <p class="muted small">Standaard leest de app <code>data/aanbiedingen.json</code> van dezelfde website. Draait u de app ergens anders (bv. lokaal op de computer), vul dan het adres van uw GitHub Pages-site in.</p>
-          <input class="input small" placeholder="https://gebruikersnaam.github.io/boodschappenbrein/data/aanbiedingen.json" value="${state.settings.offersUrl || ''}" data-change="offersUrl">
-        </div>
-
-        <div class="card">
-          <h2>Vriezer</h2>
-          <label class="gap8" style="margin-top:6px"><input type="checkbox" ${state.settings.hasFreezer !== false ? 'checked' : ''} data-change="hasFreezer"> We hebben een (losse) vriezer</label>
-          <label class="field small" style="margin-top:10px;max-width:260px">Capaciteit, grof (aantal verpakkingen)
-            <input class="input small num" type="number" min="5" max="400" value="${state.settings.freezerCapacity || 40}" data-change="freezerCap2"></label>
         </div>
 
         <div class="card">
@@ -71,17 +48,11 @@ export default {
           </div>
         </div>
 
-        <div class="card">
-          <h2>Wat werkt waar?</h2>
-          <table class="table small" style="margin-top:8px"><tbody>
-            <tr><td>Bonnen, analyse, voorraad, lijst, zoeken, menu, back-up</td><td>Volledig lokaal, ook offline</td></tr>
-            <tr><td>PDF-bonnen lezen</td><td>Eenmalig bibliotheek laden (pdf.js via jsDelivr); bestand blijft lokaal</td></tr>
-            <tr><td>Foto's (OCR)</td><td>Eenmalig ±15 MB laden (Tesseract via jsDelivr); foto blijft lokaal</td></tr>
-            <tr><td>Excel-bestanden</td><td>Eenmalig bibliotheek laden (SheetJS via cdnjs)</td></tr>
-            <tr><td>Supermarktprijzen</td><td>Download van Checkjebon.nl open data (GitHub)</td></tr>
-            <tr><td>Lijst delen</td><td>Via de deelknop van uw telefoon; geen live synchronisatie</td></tr>
-          </tbody></table>
-        </div>
+        <details class="card">
+          <summary>Geavanceerd: adres van de aanbiedingen</summary>
+          <p class="muted small">Standaard leest de app <code>data/aanbiedingen.json</code> van dezelfde website. Alleen nodig als de app ergens anders draait dan op GitHub Pages.</p>
+          <input class="input small" placeholder="https://gebruikersnaam.github.io/boodschappenbrein/data/aanbiedingen.json" value="${state.settings.offersUrl || ''}" data-change="offersUrl">
+        </details>
 
         <div class="card">
           <h2 style="color:var(--bad)">Alles wissen</h2>

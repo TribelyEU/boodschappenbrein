@@ -1,13 +1,12 @@
-import { state, derived, updateProduct, mergeProducts, adjustStock, undoAdjustment, addToList, relinkLine } from '../../data/store.js';
+import { state, derived, updateProduct, mergeProducts, adjustStock, undoAdjustment, addToList, relinkLine, setSetting } from '../../data/store.js';
 import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
 import { euro } from '../../core/money.js';
 import { priceHistory, groupBy, inRange } from '../../core/analytics.js';
 import { CATEGORIES, categoryModel } from '../../core/categories.js';
-import { MODELS } from '../../core/stock-model.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, addDays } from '../../core/dates.js';
 import { lineChart } from '../charts.js';
-import { tag, statusChip, stockMeter, daysText, empty, rhythmStrip } from '../components.js';
+import { empty, rhythmStrip } from '../components.js';
 import { RHYTHM_STATUS } from '../../core/promo-rhythm.js';
 
 export default {
@@ -41,22 +40,14 @@ export default {
       </div>
 
       <div class="grid kpis">
-        <div class="card kpi"><div class="label">12 maanden ${tag.feit}</div><div class="value num">${euro(spend)}</div><div class="sub">${year.length}× gekocht</div></div>
+        <div class="card kpi"><div class="label">12 maanden</div><div class="value num">${euro(spend)}</div><div class="sub">${year.length}× gekocht</div></div>
         <div class="card kpi"><div class="label">Laatste prijs</div><div class="value num">${hist.length ? euro(hist.at(-1).paidPerUnit) : '–'}</div><div class="sub">${hist.length ? `${storeName(hist.at(-1).store)} · ${formatDate(hist.at(-1).date, 'short')}` : ''}</div></div>
-        <div class="card kpi"><div class="label">Verbruik ${tag.schatting}</div><div class="value num">${pred?.perWeek ? `${pred.perWeek.toFixed(1).replace('.', ',')}/wk` : '–'}</div><div class="sub">${pred?.perWeek ? 'stuks per week' : 'onvoldoende gegevens'}</div></div>
         <div class="card kpi"><div class="label">Meestal bij</div><div class="value" style="font-size:19px">${stores[0] ? storeName(stores[0].key) : '–'}</div><div class="sub">${stores.length > 1 ? `ook ${stores.slice(1, 3).map((s) => storeName(s.key)).join(', ')}` : ''}</div></div>
       </div>
 
-      <div class="card" style="margin-top:14px">
-        <div class="card-head"><h2>Voorraad ${tag.voorspelling}</h2>${statusChip(pred)}</div>
-        <p class="muted small" style="margin-top:-4px">${pred ? (pred.status.id === 'onvoldoende' ? pred.reason : daysText(pred)) : 'Nog niet gekocht.'}</p>
-        ${stockMeter(pred)}
-        <div class="btn-row" style="margin-top:12px">
-          <button class="btn small" data-action="adj" data-level="op">Het is op</button>
-          <button class="btn small" data-action="adj" data-level="bijna">Bijna op</button>
-          <button class="btn small" data-action="adj" data-level="genoeg">Nog genoeg</button>
-          <button class="btn small primary" data-action="toList">${icon('plus', 16)}Op de lijst</button>
-        </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn small primary" data-action="toList">${icon('plus', 16)}Op de lijst</button>
+        <button class="btn small" data-action="toggleRepeater">${(state.settings.repeaters || []).includes(p.id) ? 'Hardloper: aan' : 'Als hardloper herinneren'}</button>
       </div>
 
       ${rh && rh.purchases ? html`<div class="card" style="margin-top:14px">
@@ -105,15 +96,19 @@ export default {
           <label class="field">Categorie
             <select class="input" data-change="category">${CATEGORIES.map((c) => html`<option value="${c.id}" ${c.id === p.category ? 'selected' : ''}>${c.name}</option>`)}</select>
           </label>
-          <label class="field">Voorraadmodel
-            <select class="input" data-change="model">${Object.entries(MODELS).map(([k, m]) => html`<option value="${k}" ${k === model ? 'selected' : ''}>${m.label}${!p.model && k === model ? ' (automatisch)' : ''}</option>`)}</select>
-          </label>
           <div><button class="btn" data-action="merge">Samenvoegen met ander product…</button>
           <p class="muted small">Gebruik dit als hetzelfde product onder twee namen staat. Alle aankopen worden samengevoegd en de app onthoudt het.</p></div>
         </div>
       </div>`;
   },
   actions: {
+    async toggleRepeater() {
+      const set = new Set(state.settings.repeaters || []);
+      const id = currentId();
+      if (set.has(id)) set.delete(id); else set.add(id);
+      await setSetting('repeaters', [...set]);
+      toast(set.has(id) ? 'Je krijgt een herinnering op de lijst als het weer tijd is' : 'Geen herinnering meer');
+    },
     async fav() { const id = currentId(); await updateProduct(id, { favorite: !state.products.get(id).favorite }); },
     async rename(el) { const v = el.value.trim(); if (v) { await updateProduct(currentId(), { name: v }); toast('Naam opgeslagen'); } },
     async category(el) { await updateProduct(currentId(), { category: el.value }); toast('Categorie aangepast; geldt voor alle aankopen van dit product'); },
@@ -124,8 +119,7 @@ export default {
     },
     async toList() {
       const p = state.products.get(currentId());
-      const pred = derived().predictions.get(p.id);
-      await addToList({ name: p.name, productId: p.id, category: p.category, qty: Math.max(1, Math.round(pred?.typicalQty || 1)) });
+      await addToList({ name: p.name, productId: p.id, category: p.category, qty: 1 });
       toast(`${p.name} staat op de lijst`);
     },
     merge() { pickProduct('Samenvoegen met…', 'Alle aankopen van dit product gaan naar het gekozen product.', async (target) => {

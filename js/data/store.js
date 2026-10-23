@@ -6,7 +6,8 @@ import { predictStock } from '../core/stock-model.js';
 import { savingsAdvice } from '../core/savings.js';
 import { rhythmOverview } from '../core/promo-rhythm.js';
 import { freezerContents, defaultsFor } from '../core/stockpile.js';
-import { weeklyAdvice, offersStatus } from '../core/offers.js';
+import { offersStatus } from '../core/offers.js';
+import { DEFAULT_WATCHLIST, watchOffers } from '../core/watch.js';
 import { categoryModel } from '../core/categories.js';
 import { proposalToRecords } from '../core/commit.js';
 import { aliasKey } from '../core/products.js';
@@ -27,6 +28,10 @@ export const DEFAULT_SETTINGS = {
   freezerCapacity: 40, // grove capaciteit in verpakkingen
   hasFreezer: true,
   offersUrl: '', // leeg = data/aanbiedingen.json naast de app (GitHub Pages)
+  watchlist: DEFAULT_WATCHLIST, // volglijst (Koopjes)
+  ratings: [], // oordelen over aanbiedingen: { key, watchId, store, title, perUnit, discount, interesting, week, at }
+  repeaters: [], // hardlopers: productId's waarvoor de lijst een herinnering geeft
+  snoozed: {}, // productId → datum tot wanneer de herinnering stil is
 };
 
 export const state = {
@@ -44,6 +49,7 @@ export const state = {
   stockpile: [],
   freezer: [],
   offers: null, // { data, fetchedAt, error }
+  history: null, // { data, fetchedAt } bewaarde aanbiedingen per week
   settings: { ...DEFAULT_SETTINGS },
   version: 0,
 };
@@ -66,10 +72,29 @@ async function openMode(mode) {
   await reload();
   if (mode === 'demo' && state.receipts.length === 0) await seedDemo();
   try { state.offers = (await db.get('market', 'offers')) || null; } catch { state.offers = null; }
+  try { state.history = (await db.get('market', 'history')) || null; } catch { state.history = null; }
   state.ready = true;
   changed();
   const age = state.offers?.fetchedAt ? Date.now() - Date.parse(state.offers.fetchedAt) : Infinity;
   if (age > 6 * 3600e3) refreshOffers().catch(() => {});
+  const hAge = state.history?.fetchedAt ? Date.now() - Date.parse(state.history.fetchedAt) : Infinity;
+  if (hAge > 20 * 3600e3) refreshHistory().catch(() => {});
+}
+
+/** Bewaarde aanbiedingen van eerdere weken (data/historie.json naast de app). Mislukt dit, dan werkt alles gewoon zonder. */
+export async function refreshHistory() {
+  const base = state.settings.offersUrl ? state.settings.offersUrl.replace(/aanbiedingen\.json(\?.*)?$/, '') : new URL('data/', location.href).href;
+  try {
+    const r = await fetch(new URL('historie.json', base).href, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data?.weeks) return null;
+    const rec = { id: 'history', data, fetchedAt: new Date().toISOString() };
+    await db.put('market', rec);
+    state.history = rec;
+    changed();
+    return rec;
+  } catch { return null; }
 }
 
 /** Haalt het aanbiedingenbestand op (zelfde website als de app, of een ingesteld adres). */
@@ -150,17 +175,10 @@ export function derived() {
   const freezer = freezerContents(state.stockpile, { lines: state.lines, adjustments: state.adjustments, products: state.products, today: t, vacations: state.settings.vacations, manual: state.freezer });
   const freezerUsed = [...freezer.values()].reduce((sum, f) => sum + f.packs, 0);
   const offerData = state.offers?.data || null;
-  let weekly = null;
-  if (offerData?.offers?.length) {
-    try {
-      weekly = weeklyAdvice(offerData, {
-        facts, lines: state.lines, adjustments: state.adjustments, products: state.products, today: t, vacations: state.settings.vacations,
-        stockpile: state.stockpile, predictions, freezerFree: (state.settings.freezerCapacity || 40) - freezerUsed,
-      }, { stores: (state.settings.myStores || []).map((x) => x.id) });
-    } catch (e) { console.error(e); weekly = null; }
-  }
+  const stores = (state.settings.myStores || []).map((x) => x.id);
+  const koopjes = (state.settings.watchlist || []).map((item) => watchOffers(item, offerData?.offers || [], { today: t, ratings: state.settings.ratings, stores }));
   const offerStatus = offersStatus(offerData, t);
-  Object.assign(cache, { version: state.version, facts, predictions, savings, rhythm, freezer, freezerUsed, weekly, offerStatus, today: t, purchasesByProduct });
+  Object.assign(cache, { version: state.version, facts, predictions, savings, rhythm, freezer, freezerUsed, koopjes, offerStatus, today: t, purchasesByProduct });
   return cache;
 }
 

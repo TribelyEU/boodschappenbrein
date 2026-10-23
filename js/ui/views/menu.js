@@ -1,11 +1,12 @@
 import { state, derived, saveMeal, deleteMeal, setPlan, addToList } from '../../data/store.js';
 import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
-import { euro } from '../../core/money.js';
 import { addDays, startOfWeek, formatDate } from '../../core/dates.js';
 import { findProducts } from '../../core/query.js';
 import { productTokens } from '../../core/products.js';
-import { priceHistory } from '../../core/analytics.js';
-import { tag, empty } from '../components.js';
+import { empty } from '../components.js';
+import { storeName } from '../../core/stores.js';
+import { dealForListItem } from '../../core/watch.js';
+import { matchOffer } from '../../core/offers.js';
 
 const DAYS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 let weekOffset = 0;
@@ -19,20 +20,20 @@ function matchIngredient(name) {
   return hits.sort((a, b) => counts.get(b.id) - counts.get(a.id))[0];
 }
 
-/** Geschatte kosten: laatste betaalde prijs per verpakking van elk herkend ingrediënt. */
-function mealCost(meal) {
-  const { facts } = derived();
-  let sum = 0;
-  let known = 0;
+/** Welke ingrediënten zijn deze week in de aanbieding (via de volglijst of een duidelijke naamovereenkomst)? */
+function dealsFor(meal) {
+  const offers = state.offers?.data?.offers || [];
+  if (!offers.length) return [];
+  const today = derived().today;
+  const out = [];
   for (const ing of meal.ingredients) {
-    const p = matchIngredient(ing.name);
-    if (!p) continue;
-    const h = priceHistory(facts, p.id);
-    if (!h.length) continue;
-    sum += h.at(-1).paidPerUnit * (ing.qty || 1);
-    known++;
+    const key = productTokens(ing.name).join(' ');
+    const pseudo = key ? new Map([['x', { id: 'x', key, name: ing.name }]]) : null;
+    const d = dealForListItem(ing.name, { offers, watchlist: state.settings.watchlist || [], ratings: state.settings.ratings || [], today,
+      stores: (state.settings.myStores || []).map((s) => s.id), matchByName: pseudo ? (o) => matchOffer(o, pseudo).length > 0 : null });
+    if (d) out.push(`${ing.name} (${storeName(d.offer.store)})`);
   }
-  return { sum, known, total: meal.ingredients.length };
+  return out;
 }
 
 function editMeal(meal = { name: '', ingredients: [], kids: true, favorite: false }) {
@@ -65,13 +66,12 @@ function editMeal(meal = { name: '', ingredients: [], kids: true, favorite: fals
 
 export default {
   render() {
-    const { today, predictions } = derived();
+    const { today } = derived();
     const monday = addDays(startOfWeek(today), weekOffset * 7);
     const meals = [...state.meals].sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
     const byId = new Map(meals.map((m) => [m.id, m]));
     return html`
-      <a class="small" href="#/lijst">${icon('back', 14)} Boodschappenlijst</a>
-      <div class="page-head"><div><h1>Weekmenu</h1><p class="muted">Plan maaltijden en zet ingrediënten met één tik op de lijst.</p></div>
+      <div class="page-head"><div><h1>Weekmenu</h1></div>
         <button class="btn small primary" data-action="newMeal">${icon('plus', 16)}Gerecht</button></div>
       <div class="between" style="margin-bottom:10px">
         <button class="btn small" data-action="week" data-d="-1">${icon('back', 14)}</button>
@@ -89,19 +89,17 @@ export default {
         </div>`;
       })}</div></div>
       <button class="btn primary block" style="margin-top:12px" data-action="toList" data-monday="${monday}">${icon('list', 18)}Ingrediënten van deze week op de lijst</button>
-      <p class="muted tiny">Ingrediënten die volgens de voorraadschatting nog ruim voldoende zijn, worden overgeslagen; u ziet welke.</p>
 
       <div class="section-label">Gerechten</div>
       ${meals.length ? html`<div class="card tight"><div class="rows">${meals.map((m) => {
-        const c = mealCost(m);
-        const inStock = m.ingredients.filter((ing) => { const p = matchIngredient(ing.name); return p && predictions.get(p.id)?.status.id === 'voldoende'; }).length;
+        const deals = dealsFor(m);
         return html`<div class="row-item clickable" data-action="editMeal" data-id="${m.id}">
           <div class="grow"><div class="title">${m.favorite ? '★ ' : ''}${m.name}</div>
-          <div class="sub">${m.ingredients.length} ingrediënten${m.kids ? ' · kindvriendelijk' : ''}${inStock ? ` · ${inStock} waarschijnlijk in huis` : ''}</div></div>
-          <div style="text-align:right"><div class="amount num">${c.known ? `±${euro(c.sum)}` : '–'}</div><div class="tiny muted">${c.known ? `${c.known}/${c.total} ingr. bekend` : 'prijs onbekend'}</div></div>
+          <div class="sub">${m.ingredients.length} ingrediënten${m.kids ? ' · kindvriendelijk' : ''}</div>
+          ${deals.length ? html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} In de aanbieding: ${deals.join(', ')}</div>` : ''}</div>
+          ${icon('chevron', 16)}
         </div>`;
-      })}</div></div>
-      <p class="muted tiny">${tag.schatting} Kosten per maaltijd = laatst betaalde prijs per verpakking van de ingrediënten die in uw aankopen voorkomen.</p>` : html`<div class="card">${empty('Nog geen gerechten', 'Voeg uw vaste gerechten toe, zoals pasta bolognese of nasi.')}</div>`}`;
+      })}</div></div>` : html`<div class="card">${empty('Nog geen gerechten', 'Voeg jullie vaste gerechten toe, zoals pasta bolognese of nasi.')}</div>`}`;
   },
   actions: {
     newMeal() { editMeal(); },
@@ -110,25 +108,22 @@ export default {
     async plan(el) { await setPlan(el.dataset.date, el.value || null); },
     async toList(el) {
       const monday = el.dataset.monday;
-      const { predictions } = derived();
       const need = new Map();
-      const skipped = [];
       for (let i = 0; i < 7; i++) {
         const plan = state.plan.get(addDays(monday, i));
         const meal = plan && state.meals.find((m) => m.id === plan.mealId);
         if (!meal) continue;
         for (const ing of meal.ingredients) {
           const p = matchIngredient(ing.name);
-          if (p && predictions.get(p.id)?.status.id === 'voldoende' && !need.has(ing.name.toLowerCase())) { skipped.push(p.name); continue; }
           const k = ing.name.toLowerCase();
           const cur = need.get(k) || { name: p?.name || ing.name, productId: p?.id, category: p?.category, qty: 0 };
           cur.qty += ing.qty || 1;
           need.set(k, cur);
         }
       }
-      if (!need.size && !skipped.length) { toast('Er zijn nog geen maaltijden gepland deze week.'); return; }
+      if (!need.size) { toast('Er zijn nog geen maaltijden gepland deze week.'); return; }
       for (const it of need.values()) await addToList({ ...it, source: 'menu' });
-      toast(`${need.size} ingrediënten op de lijst${skipped.length ? ` · overgeslagen (waarschijnlijk in huis): ${[...new Set(skipped)].join(', ')}` : ''}`, { duration: 7000 });
+      toast(`${need.size} ingrediënten op de lijst`);
     },
   },
 };

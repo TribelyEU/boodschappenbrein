@@ -156,12 +156,15 @@ export function sizesIn(text) {
   eat(new RegExp(`\\bper\\s*${N}?\\s*${U}\\b`, 'g'), (m) => { const u = unitOf(m[2], m[1] || '1'); if (m[1] || u.unit !== 'st') per = u; });
   // 6 x 0,33 l · 24 blikken a 33cl · 4 stuks van 125 gram
   eat(new RegExp(`(\\d+)\\s*(?:x|×|[a-z]+\\s+(?:a|van))\\s*${N}\\s*${U}\\b`, 'g'), (m) => { const one = unitOf(m[3], m[2]); options.push({ amount: Math.round(one.amount * +m[1] * 1000) / 1000, unit: one.unit, count: +m[1] }); });
+  // 8-packs 250 ml · 6-pack blik a 33 cl · 250 ml 4-pack → aantal × inhoud
+  eat(new RegExp(`(\\d+)\\s*-?\\s*packs?\\s+(?:[a-z]+\\s+){0,2}(?:a\\s+)?${N}\\s*${U}\\b(?!\\s*(?:of|/))`, 'g'), (m) => { const one = unitOf(m[3], m[2]); options.push({ amount: Math.round(one.amount * +m[1] * 1000) / 1000, unit: one.unit, count: +m[1] }); });
+  eat(new RegExp(`${N}\\s*${U}\\s+(\\d+)\\s*-?\\s*packs?\\b`, 'g'), (m) => { const one = unitOf(m[2], m[1]); options.push({ amount: Math.round(one.amount * +m[3] * 1000) / 1000, unit: one.unit, count: +m[3] }); });
   // 2-pack · 4 pack (aantal stuks)
   eat(/\b(\d+)\s*-?\s*pack\b/g, (m) => { options.push({ amount: +m[1], unit: 'st' }); });
   // 320 - 350 gram · 175-218 g · 500-1000 g
   eat(new RegExp(`${N}\\s*(?:-|tot)\\s*${N}\\s*${U}\\b`, 'g'), (m) => { const a = unitOf(m[3], m[1]); const b = unitOf(m[3], m[2]); ranges.push({ min: Math.min(a.amount, b.amount), max: Math.max(a.amount, b.amount), unit: a.unit }); });
   // 750 of 900 gram · 80 of 125 gram
-  eat(new RegExp(`${N}\\s*(?:of|/|en)\\s*${N}\\s*${U}\\b`, 'g'), (m) => { options.push(unitOf(m[3], m[1]), unitOf(m[3], m[2])); });
+  eat(new RegExp(`${N}\\s*(?:of|/|en)\\s*(?:[a-z]+\\s+)?${N}\\s*${U}\\b`, 'g'), (m) => { options.push(unitOf(m[3], m[1]), unitOf(m[3], m[2])); });
   // losse inhouden
   eat(new RegExp(`(?:^|[^\\d.])${N}\\s*${U}\\b`, 'g'), (m) => { options.push(unitOf(m[2], m[1])); });
   return { options, ranges, per };

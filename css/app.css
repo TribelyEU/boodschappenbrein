@@ -296,5 +296,5 @@ details summary { cursor: pointer; font-weight: 600; }
 .big-action small { display: block; font-weight: 500; font-size: 13px; opacity: .85; }
 .quiet-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .quiet-line .num-big { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
-.tabbar { grid-template-columns: repeat(5, 1fr); }
+.tabbar { grid-template-columns: repeat(4, 1fr); }
 .tab span { font-size: 11px; }
