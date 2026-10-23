@@ -66,8 +66,9 @@ export function buildFacts(lines, products) {
       discount,
       net: l.amount + discount,
       qty: l.qty || 1,
-      sizeAmount: l.sizeAmount || null,
-      sizeUnit: l.sizeUnit || null,
+      // Zelf ingevulde inhoud bij het product ("6 x 1,5 l") gaat voor; anders wat op de bon staat
+      sizeAmount: (!l.weighed && p?.size?.amount) || l.sizeAmount || null,
+      sizeUnit: (!l.weighed && p?.size?.amount ? p.size.unit : l.sizeUnit) || null,
       weighed: Boolean(l.weighed),
       promo: Boolean(l.promo),
       normalUnknown: Boolean(l.normalUnknown),

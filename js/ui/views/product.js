@@ -1,6 +1,7 @@
 import { state, derived, updateProduct, mergeProducts, adjustStock, undoAdjustment, addToList, relinkLine, setSetting } from '../../data/store.js';
 import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
 import { euro } from '../../core/money.js';
+import { parseOwnSize, sizeText } from '../../core/products.js';
 import { priceHistory, groupBy, inRange } from '../../core/analytics.js';
 import { CATEGORIES, categoryModel } from '../../core/categories.js';
 import { storeName } from '../../core/stores.js';
@@ -93,6 +94,9 @@ export default {
         <h2>Instellingen product</h2>
         <div class="stack" style="margin-top:12px">
           <label class="field">Naam<input class="input" value="${p.name}" data-change="rename"></label>
+          <label class="field">Inhoud per verpakking
+            <input class="input" value="${p.size?.text || ''}" placeholder="${(() => { const l = lines.find((x) => x.sizeAmount); return l ? `${sizeText({ amount: l.sizeAmount, unit: l.sizeUnit })} (van de bon)` : 'bv. 6 x 1,5 l, 300 g of 40 stuks'; })()}" data-change="size" autocomplete="off">
+            <span class="tiny muted">Staat het niet (goed) op de bon, vul het hier in. Dan rekent de app per liter, kilo of stuk.</span></label>
           <label class="field">Categorie
             <select class="input" data-change="category">${CATEGORIES.map((c) => html`<option value="${c.id}" ${c.id === p.category ? 'selected' : ''}>${c.name}</option>`)}</select>
           </label>
@@ -110,6 +114,13 @@ export default {
       toast(set.has(id) ? 'Je krijgt een herinnering op de lijst als het weer tijd is' : 'Geen herinnering meer');
     },
     async fav() { const id = currentId(); await updateProduct(id, { favorite: !state.products.get(id).favorite }); },
+    async size(el) {
+      const v = el.value.trim();
+      const size = parseOwnSize(v);
+      if (v && !size) { toast('Inhoud niet herkend; schrijf bijvoorbeeld 6 x 1,5 l of 300 g'); return; }
+      await updateProduct(currentId(), { size: size || null });
+      toast(size ? `Inhoud opgeslagen: ${sizeText(size)}` : 'Inhoud gewist');
+    },
     async rename(el) { const v = el.value.trim(); if (v) { await updateProduct(currentId(), { name: v }); toast('Naam opgeslagen'); } },
     async category(el) { await updateProduct(currentId(), { category: el.value }); toast('Categorie aangepast; geldt voor alle aankopen van dit product'); },
     async model(el) { await updateProduct(currentId(), { model: el.value }); },

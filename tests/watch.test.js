@@ -228,3 +228,19 @@ test('producten bij een actie: merk en hoofdwoord uit de actietitel (Perla, niet
   assert.ok(gehakt.includes('AH Rundergehakt') && gehakt.includes('AH Gemengd gehakt') && gehakt.includes('AH Terra Plantaardig rulgehakt'));
   assert.ok(!gehakt.includes('AH Gehaktbal naturel') && !gehakt.includes('AH Terra Plantaardige sojadrink'), gehakt.join(', '));
 });
+
+test('zelf ingevulde inhoud bij een product: per liter vergelijken ook als de bon het niet noemt', async () => {
+  const { buildFacts } = await import('../js/core/analytics.js');
+  const { priceStats } = await import('../js/core/stockpile.js');
+  const { normalPriceIn } = await import('../js/core/watch.js');
+  const { parseOwnSize, sizeText } = await import('../js/core/products.js');
+  const size = parseOwnSize('6 x 1,5 l');
+  assert.deepEqual([size.amount, size.unit, size.count], [9000, 'ml', 6]);
+  assert.equal(sizeText({ amount: 9000, unit: 'ml', count: 6 }), '6 x 1,5 liter');
+  const products = new Map([['p', { id: 'p', name: 'Cola zero sugar 6 pack', category: 'dranken', size }]]);
+  const lines = [1, 2, 3].map((i) => ({ id: `l${i}`, receiptId: `r${i}`, productId: 'p', date: `2026-09-0${i}`, store: 'ah', rawName: 'AH COLA ZERO 6PACK', qty: 1, unitPrice: 449, amount: 449, kind: 'product' }));
+  const facts = buildFacts(lines, products);
+  assert.equal(facts[0].sizeAmount, 9000);
+  const st = priceStats(facts, 'p');
+  assert.deepEqual(normalPriceIn({ unit: 'liter' }, st), { perUnit: 50, per: 'liter' }, '€ 4,49 voor 9 liter = € 0,50 per liter');
+});

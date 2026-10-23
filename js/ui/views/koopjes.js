@@ -7,7 +7,7 @@ import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
 import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded } from '../../core/watch.js';
-import { parseSize, detectBrand } from '../../core/products.js';
+import { parseSize, detectBrand, parseOwnSize, sizeText as productSizeText } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
 const hcache = { v: -1, map: new Map() };
@@ -117,7 +117,7 @@ function equivBlock(item) {
   const src = (e) => (e.productId ? '' : e.source === 'assortiment' ? ' (winkelprijs)' : '');
   const price = (e) => (e.price?.perUnit != null ? `${euro(e.price.perUnit)} per ${unitLabel(item)}${src(e)}` : e.price?.perPack != null ? `${euro(e.price.perPack)} per verpakking${src(e)}` : e.productId ? 'prijs onbekend' : 'prijs onbekend');
   return html`<div class="small" style="background:var(--surface-2);border-radius:10px;padding:8px 10px;margin:4px 0 6px">
-    ${refs.length ? html`<div><strong>Jullie kopen:</strong></div>${refs.map((r) => html`<div>${r.name}${r.store ? ` (${storeName(r.store)})` : ''} · ${price(r)}</div>`)}` : ''}
+    ${refs.length ? html`<div><strong>Jullie kopen:</strong></div>${refs.map((r) => html`<div>${r.name}${r.store ? ` (${storeName(r.store)})` : ''} · ${price(r)}${r.price?.perPack != null && unitOf(item).base ? html` <span style="color:var(--warn)">· inhoud onbekend, vul in bij Wijzig</span>` : ''}</div>`)}` : ''}
     ${equiv.map((e) => html`<div class="muted">Gelijkwaardig: ${e.name}${e.store ? ` (${storeName(e.store)})` : ''} · ${price(e)}</div>`)}
     <button class="btn small ghost" data-action="editItem" data-w="${item.id}" style="padding:2px 0;margin-top:2px">Wijzig</button>
   </div>`;
@@ -341,6 +341,18 @@ function editSheet(openId = null) {
 }
 
 // ---------- equivalenten bewerken ----------
+
+/** Inhoud van een eigen product (uit de bonnen of zelf ingevuld), met een veld om die in te vullen of te verbeteren. */
+function sizeRow(e) {
+  if (!e.productId) return e.size?.amount ? `<div class="tiny muted">inhoud: ${esc(productSizeText(e.size))}</div>` : '';
+  const p = state.products.get(e.productId);
+  const line = state.lines.find((l) => l.productId === e.productId && l.sizeAmount);
+  const known = p?.size || (line ? { amount: line.sizeAmount, unit: line.sizeUnit } : null); // zelf ingevuld gaat voor
+  return `<div class="gap8" style="margin-top:4px;align-items:center">
+    <span class="tiny ${known ? 'muted' : ''}" style="${known ? '' : 'color:var(--warn);font-weight:600'};white-space:nowrap">${known ? `inhoud: ${esc(productSizeText(known))}${p?.size ? '' : ' (bon)'}` : 'inhoud onbekend'}</span>
+    <input class="input small" data-psize="${esc(e.productId)}" placeholder="${known ? 'wijzig, bv. 6 x 1,5 l' : 'bv. 6 x 1,5 l'}" value="${esc(p?.size?.text || '')}" autocomplete="off" style="max-width:160px">
+    <button type="button" class="btn small" data-psave="${esc(e.productId)}">Opslaan</button></div>`;
+}
 const STORE_IDS = ['ah', 'lidl', 'jumbo', 'dirk', 'hoogvliet', 'aldi', 'plus', 'action', 'kruidvat', 'wibra'];
 
 function equivEditor(w) {
@@ -349,12 +361,12 @@ function equivEditor(w) {
   return `<div style="border-top:1px solid var(--line);padding-top:10px">
     <strong>Wat jullie nu kopen</strong> <span class="tiny muted">(maximaal ${MAX_REFS})</span>
     <p class="tiny muted" style="margin:2px 0 6px">Daar vergelijkt de app elke aanbieding mee, met de normale prijs uit jullie bonnen.</p>
-    ${refsOf(w).map((r, i) => `<div class="between small" style="padding:4px 0"><span>${esc(r.name)}${r.store ? ` · ${esc(storeName(r.store))}` : ''}</span><button type="button" class="icon-btn" data-refdel="${i}" aria-label="Verwijderen">${icon('trash', 16)}</button></div>`).join('')}
+    ${refsOf(w).map((r, i) => `<div class="small" style="padding:4px 0"><div class="between"><span>${esc(r.name)}${r.store ? ` · ${esc(storeName(r.store))}` : ''}</span><button type="button" class="icon-btn" data-refdel="${i}" aria-label="Verwijderen">${icon('trash', 16)}</button></div>${sizeRow(r)}</div>`).join('')}
     ${refsOf(w).length < MAX_REFS && cands.length ? `<select class="input" data-ref style="margin-top:4px"><option value="">${refsOf(w).length ? 'Nog een toevoegen…' : 'Kies uit jullie aankopen…'}</option>${cands.filter((c) => !refsOf(w).some((r) => r.productId === c.productId)).map(opt).join('')}</select>` : ''}
     ${!cands.length ? '<p class="tiny muted" style="margin:4px 0 0">Nog niets gevonden in jullie bonnen dat bij de zoekwoorden past.</p>' : ''}
     <div style="margin-top:12px"><strong>Gelijkwaardig</strong></div>
     <p class="tiny muted" style="margin:2px 0 6px">Huismerken of andere merken die voor jullie hetzelfde zijn, bijvoorbeeld Lidl Freeway cola zero naast AH cola zero.</p>
-    ${(w.equiv || []).map((e, i) => `<div class="between small" style="padding:4px 0"><span>${esc(e.name)}${e.store ? ` · ${esc(storeName(e.store))}` : ''}</span><button type="button" class="icon-btn" data-eqdel="${i}" aria-label="Verwijderen">${icon('trash', 16)}</button></div>`).join('')}
+    ${(w.equiv || []).map((e, i) => `<div class="small" style="padding:4px 0"><div class="between"><span>${esc(e.name)}${e.store ? ` · ${esc(storeName(e.store))}` : ''}</span><button type="button" class="icon-btn" data-eqdel="${i}" aria-label="Verwijderen">${icon('trash', 16)}</button></div>${sizeRow(e)}</div>`).join('')}
     ${cands.length ? `<select class="input" data-eqpick style="margin-top:4px"><option value="">Toevoegen uit jullie aankopen…</option>${cands.map(opt).join('')}</select>` : ''}
     <div class="gap8" style="margin-top:6px">
       <input class="input" data-eqname placeholder="Of typ een naam, bv. Freeway cola zero" autocomplete="off">
@@ -397,6 +409,16 @@ function wireEquiv(box, w, redraw) {
     save({ equiv: [...(w.equiv || []), { name, store: box.querySelector('[data-eqstore]').value }] });
   });
   box.querySelector('[data-suggest]')?.addEventListener('click', () => showSuggestions(box, w, save));
+  box.querySelectorAll('[data-psave]').forEach((b) => b.addEventListener('click', async () => {
+    const pid = b.dataset.psave;
+    const v = box.querySelector(`[data-psize="${CSS.escape(pid)}"]`).value.trim();
+    const size = parseOwnSize(v);
+    if (v && !size) { toast('Inhoud niet herkend; schrijf bijvoorbeeld 6 x 1,5 l of 300 g'); return; }
+    const { updateProduct } = await import('../../data/store.js');
+    await updateProduct(pid, { size: size || null });
+    toast(size ? `Inhoud opgeslagen: ${productSizeText(size)}` : 'Inhoud gewist');
+    redraw();
+  }));
   box.querySelectorAll('[data-eqdel]').forEach((b) => b.addEventListener('click', () => {
     const eq = [...(w.equiv || [])];
     eq.splice(+b.dataset.eqdel, 1);

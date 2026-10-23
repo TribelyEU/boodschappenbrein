@@ -219,3 +219,20 @@ export function createProduct(rawName, key) {
     createdAt: new Date().toISOString(),
   };
 }
+
+/** Inhoud leesbaar: 9000 ml (6 x 1,5 l) → "6 x 1,5 liter", 300 g → "300 gram". */
+export function sizeText(size) {
+  if (!size?.amount) return '';
+  if (size.text) return size.text;
+  const one = size.count > 1 ? size.amount / size.count : size.amount;
+  const f = (a, u) => (u === 'g' ? (a >= 1000 ? `${String(a / 1000).replace('.', ',')} kilo` : `${a} gram`) : u === 'ml' ? (a >= 1000 ? `${String(a / 1000).replace('.', ',')} liter` : `${a} ml`) : `${a} stuks`);
+  return size.count > 1 && size.unit !== 'st' ? `${size.count} x ${f(Math.round(one * 1000) / 1000, size.unit)}` : f(size.amount, size.unit);
+}
+
+/** Inhoud die jullie zelf invullen ("6 x 1,5 l", "300 g", "40 stuks") → { amount, unit, count, text } of null. */
+export function parseOwnSize(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const s = parseSize(t);
+  return s ? { amount: s.amount, unit: s.unit, count: s.count || 1, text: t } : null;
+}
