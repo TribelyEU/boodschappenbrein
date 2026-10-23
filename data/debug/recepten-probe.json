@@ -23,5 +23,76 @@
   "status": 401,
   "type": "application/json; charset=UTF-8",
   "sample": "{\"code\":\"rest_cannot_access\",\"message\":\"Alleen geverifieerde gebruikers hebben toegang tot de REST API.\",\"data\":{\"status\":401}}"
- }
+ },
+ "sitemap": {
+  "count": 1001,
+  "first": [
+   {
+    "loc": "https://www.lekkerensimpel.com/nieuwe-recepten/",
+    "mod": "2026-10-15T11:01:19+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/lekker-en-simpel-te-druk-bezocht/",
+    "mod": "2012-06-05T18:02:21+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/appel-chimichangas/",
+    "mod": "2013-01-06T11:28:00+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/ingezonden-door-joan-rodekoolschotel/",
+    "mod": "2013-03-16T08:25:17+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/en-de-winnaars-zijn/",
+    "mod": "2013-03-20T07:17:01+00:00"
+   }
+  ],
+  "last": [
+   {
+    "loc": "https://www.lekkerensimpel.com/maaltijdsalade-tonijn/",
+    "mod": "2015-05-08T20:27:42+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/gevulde-broodjes/",
+    "mod": "2015-05-08T20:27:50+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/food-photos-22/",
+    "mod": "2015-05-08T20:28:54+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/best-bekeken-recepten-van-week-38-2/",
+    "mod": "2015-05-08T20:29:13+00:00"
+   },
+   {
+    "loc": "https://www.lekkerensimpel.com/wraps-met-courgette-en-feta/",
+    "mod": "2015-05-08T20:30:35+00:00"
+   }
+  ]
+ },
+ "pages": [
+  {
+   "link": "https://www.lekkerensimpel.com/nieuwe-recepten/",
+   "status": 200,
+   "size": 151943,
+   "ldCount": 1,
+   "ld": [
+    "{\"@context\":\"https:\\/\\/schema.org\",\"@graph\":[{\"@type\":[\"WebPage\",\"CollectionPage\"],\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/nieuwe-recepten\\/\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/nieuwe-recepten\\/\",\"name\":\"Nieuwe recepten | Lekker en Simpel\",\"isPartOf\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#website\"},\"datePublished\":\"2020-07-15T13:06:55+00:00\",\"dateModified\":\"2020-07-15T13:06:57+00:00\",\"breadcrumb\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/nieuwe-recepten\\/#breadcrumb\"},\"inLanguage\":\"nl-NL\"},{\"@type\":\"BreadcrumbList\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/nieuwe-recepten\\/#breadcrumb\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"Home\",\"item\":\"https:\\/\\/www.lekkerensimpel.com\\/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Nieuwe recepten\"}]},{\"@type\":\"WebSite\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#website\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/\",\"name\":\"Lekker en Simpel\",\"description\":\"Elke dag weer nieuwe lekkere, snelle en simpele recepten op Lekker en Simpel.\",\"publisher\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#organization\"},\"potentialAction\":[{\"@type\":\"SearchAction\",\"target\":{\"@type\":\"EntryPoint\",\"urlTemplate\":\"https:\\/\\/www.lekkerensimpel.com\\/?s={search_term_string}\"},\"query-input\":{\"@type\":\"PropertyValueSpecification\",\"valueRequired\":true,\"valueName\":\"search_term_string\"}}],\"inLanguage\":\"nl-NL\"},{\"@type\":\"Organization\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#organization\",\"name\":\"Lekker en Simpel\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/\",\"logo\":{\"@type\":\"ImageObject\",\"inLanguage\":\"nl-NL\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/logo\\/image\\/\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2021\\/11\\/1041c.png\",\"contentUrl\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2021\\/11\\/1041c.png\",\"width\":1111,\"height\":1082,\"caption\":\"Lekker en Simpel\"},\"image\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/logo\\/image\\/\"},\"sameAs\":[\"https:\\/\\/www.facebook.com\\/lekkerensimpelnl\",\"https:\\/\\/www.instagram.com\\/lekkerensimpel\\/\"]}]}"
+   ],
+   "wprm": true,
+   "tasty": false
+  },
+  {
+   "link": "https://www.lekkerensimpel.com/wraps-met-courgette-en-feta/",
+   "status": 200,
+   "size": 168820,
+   "ldCount": 1,
+   "ld": [
+    "{\"@context\":\"https:\\/\\/schema.org\",\"@graph\":[{\"@type\":\"Article\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#article\",\"isPartOf\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/\"},\"author\":{\"name\":\"Lekker en Simpel\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/person\\/e47d035d8c308aeae2e21bfb3fccb604\"},\"headline\":\"Simpele wraps met courgette, feta en dille\",\"datePublished\":\"2014-09-18T11:00:00+00:00\",\"dateModified\":\"2015-05-08T20:30:35+00:00\",\"mainEntityOfPage\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/\"},\"wordCount\":129,\"commentCount\":6,\"publisher\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#organization\"},\"image\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#primaryimage\"},\"thumbnailUrl\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2015\\/05\\/IMG_9987_zps9e3dbc3a.jpg\",\"keywords\":[\"wraps\",\"groente\",\"courgette\"],\"articleSection\":[\"Vegetarische recepten\",\"Lunch\",\"Hoofdgerechten\"],\"inLanguage\":\"nl-NL\",\"potentialAction\":[{\"@type\":\"CommentAction\",\"name\":\"Comment\",\"target\":[\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#respond\"]}]},{\"@type\":\"WebPage\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/\",\"name\":\"Simpele wraps met courgette, feta en dille | Lekker en Simpel\",\"isPartOf\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#website\"},\"primaryImageOfPage\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#primaryimage\"},\"image\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#primaryimage\"},\"thumbnailUrl\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2015\\/05\\/IMG_9987_zps9e3dbc3a.jpg\",\"datePublished\":\"2014-09-18T11:00:00+00:00\",\"dateModified\":\"2015-05-08T20:30:35+00:00\",\"description\":\"Zin in een lekkere lunch of een simpel avondmaaltje? Maak dan eens deze lekkere wraps met onder andere courgette, feta, dille en bosui. In 10 min. op tafel.\",\"breadcrumb\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#breadcrumb\"},\"inLanguage\":\"nl-NL\",\"potentialAction\":[{\"@type\":\"ReadAction\",\"target\":[\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/\"]}]},{\"@type\":\"ImageObject\",\"inLanguage\":\"nl-NL\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#primaryimage\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2015\\/05\\/IMG_9987_zps9e3dbc3a.jpg\",\"contentUrl\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2015\\/05\\/IMG_9987_zps9e3dbc3a.jpg\",\"width\":1024,\"height\":682},{\"@type\":\"BreadcrumbList\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/wraps-met-courgette-en-feta\\/#breadcrumb\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"Home\",\"item\":\"https:\\/\\/www.lekkerensimpel.com\\/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"Simpele wraps met courgette, feta en dille\"}]},{\"@type\":\"WebSite\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#website\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/\",\"name\":\"Lekker en Simpel\",\"description\":\"Elke dag weer nieuwe lekkere, snelle en simpele recepten op Lekker en Simpel.\",\"publisher\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#organization\"},\"potentialAction\":[{\"@type\":\"SearchAction\",\"target\":{\"@type\":\"EntryPoint\",\"urlTemplate\":\"https:\\/\\/www.lekkerensimpel.com\\/?s={search_term_string}\"},\"query-input\":{\"@type\":\"PropertyValueSpecification\",\"valueRequired\":true,\"valueName\":\"search_term_string\"}}],\"inLanguage\":\"nl-NL\"},{\"@type\":\"Organization\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#organization\",\"name\":\"Lekker en Simpel\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/\",\"logo\":{\"@type\":\"ImageObject\",\"inLanguage\":\"nl-NL\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/logo\\/image\\/\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2021\\/11\\/1041c.png\",\"contentUrl\":\"https:\\/\\/www.lekkerensimpel.com\\/wp-content\\/uploads\\/2021\\/11\\/1041c.png\",\"width\":1111,\"height\":1082,\"caption\":\"Lekker en Simpel\"},\"image\":{\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/logo\\/image\\/\"},\"sameAs\":[\"https:\\/\\/www.facebook.com\\/lekkerensimpelnl\",\"https:\\/\\/www.instagram.com\\/lekkerensimpel\\/\"]},{\"@type\":\"Person\",\"@id\":\"https:\\/\\/www.lekkerensimpel.com\\/#\\/schema\\/person\\/e47d035d8c308aeae2e21bfb3fccb604\",\"name\":\"Lekker en Simpel\",\"image\":{\"@type\":\"ImageObject\",\"inLanguage\":\"nl-NL\",\"@id\":\"https:\\/\\/secure.gravatar.com\\/avatar\\/90e81bfd62ede841e35cdb80d349df3fdad16018ddef62b6122291625ecc36a2?s=96&d=blank&r=g\",\"url\":\"https:\\/\\/secure.gravatar.com\\/avatar\\/90e81bfd62ede841e35cdb80d349df3fdad16018ddef62b6122291625ecc36a2?s=96&d=blank&r=g\",\"contentUrl\":\"https:\\/\\/secure.gravatar.com\\/avatar\\/90e81bfd62ede841e35cdb80d349df3fdad16018ddef62b6122291625ecc36a2?s=96&d=blank&r=g\",\"caption\":\"Lekker en Simpel\"},\"description\":\"Sofie en Jorrit - 33 &amp; 34 jaar - houden van lekkere en simpele gerechten en zijn hier dagelijks mee bezig - Eigenaar van de website Lekker en Simpel en de gelijknamige kookboeken.\",\"url\":\"https:\\/\\/www.lekkerensimpel.com\\/author\\/lekkerensimpel\\/\"}]}"
+   ],
+   "wprm": true,
+   "tasty": false
+  }
+ ]
 }
