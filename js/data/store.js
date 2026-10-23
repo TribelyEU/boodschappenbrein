@@ -76,7 +76,17 @@ async function openMode(mode) {
   state.ready = true;
   changed();
   const age = state.offers?.fetchedAt ? Date.now() - Date.parse(state.offers.fetchedAt) : Infinity;
-  if (age > 6 * 3600e3) refreshOffers().catch(() => {});
+  // Het bestand is klein (±170 kB): bij elke start even kijken of er een nieuwere versie is,
+  // en opnieuw als de app na een uur weer wordt geopend.
+  if (age > 60e3) refreshOffers().catch(() => {});
+  if (!openMode.watching) {
+    openMode.watching = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      const a = state.offers?.fetchedAt ? Date.now() - Date.parse(state.offers.fetchedAt) : Infinity;
+      if (a > 3600e3) refreshOffers().catch(() => {});
+    });
+  }
   const hAge = state.history?.fetchedAt ? Date.now() - Date.parse(state.history.fetchedAt) : Infinity;
   if (hAge > 20 * 3600e3) refreshHistory().catch(() => {});
 }
