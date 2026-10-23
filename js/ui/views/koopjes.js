@@ -238,6 +238,9 @@ function swipeSheet() {
         <div style="margin-top:14px;font-size:30px;font-weight:800" class="num">${x.perUnit != null ? `${esc(euro(x.perUnit))} <span class="small muted" style="font-weight:500">per ${esc(unitLabel(item))}</span>` : x.packPrice != null ? `${esc(euro(x.packPrice))} <span class="small muted" style="font-weight:500">per stuk/pak</span>` : esc(o.mechanism || '')}</div>
         ${o.was && x.packPrice != null && o.was > x.packPrice ? `<div class="small muted">van ${esc(euro(o.was))}</div>` : ''}
         ${x.perUnit == null && x.discount != null ? `<div class="small muted">${pct(x.discount)} korting</div>` : ''}
+        ${x.choice ? `<div class="small" style="margin-top:8px">Gekozen: <strong>${esc(x.choice.name || x.choice.sizeText)}</strong>${x.choice.normal ? ` (normaal ${esc(euro(x.choice.normal))})` : ''} · <a href="#" data-choose>wijzig</a></div>`
+          : x.perUnit == null && unitOf(item).base ? `<button type="button" class="btn small" data-choose style="margin-top:10px">Kies welke je zou nemen</button>
+            <div class="tiny muted" style="margin-top:4px">Dan rekent de app de prijs per ${esc(unitLabel(item))} uit.</div>` : ''}
         ${o.url ? `<div style="margin-top:8px"><a href="${esc(o.url)}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">Bekijk bij ${esc(storeName(o.store))} ↗</a></div>` : ''}
         ${own ? `<div class="tiny muted" style="margin-top:10px">Laatst zelf betaald: ${own.perUnit != null ? `${esc(euro(own.perUnit))} per ${esc(unitLabel(item))}` : `${esc(euro(own.perPack))} per stuk/pak`} (${esc(storeName(own.store))})</div>` : ''}
       </div>
@@ -247,6 +250,8 @@ function swipeSheet() {
       </div>
       <p class="tiny muted" style="text-align:center;margin:10px 0 0">Veeg naar rechts voor interessant, naar links voor niet.</p>`;
     const card = box.querySelector('[data-card]');
+    box.querySelector('[data-choose]')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); chooseSheet(x.key, item.id, { onDone: swipeSheet }); });
+    box.querySelector('[data-choose]')?.addEventListener('pointerdown', (e) => e.stopPropagation());
     const answer = async (v) => {
       card.style.transform = `translateX(${v ? 120 : -120}%) rotate(${v ? 8 : -8}deg)`;
       await rate(x.key, item.id, v);
@@ -489,7 +494,8 @@ async function saveChoice(key, choice) {
   await setSetting('offerChoices', all);
 }
 
-async function chooseSheet(key, watchId) {
+async function chooseSheet(key, watchId, { onDone = null } = {}) {
+  const done = () => { closeSheet(); if (onDone) setTimeout(onDone, 50); };
   const g = derived().koopjes.find((k) => k.item.id === watchId);
   const x = g?.offers.find((o) => o.key === key);
   if (!x) return;
@@ -513,12 +519,12 @@ async function chooseSheet(key, watchId) {
       <button class="btn" data-own aria-label="Opslaan">${icon('check', 16)}</button>
     </div>
     <div class="btn-row" style="margin-top:12px;justify-content:space-between">${x.choice ? '<button class="btn danger small" data-clear>Keuze wissen</button>' : '<span></span>'}<button class="btn" data-close>Sluiten</button></div>`);
-  sheet.querySelector('[data-close]').onclick = closeSheet;
-  sheet.querySelector('[data-clear]')?.addEventListener('click', async () => { await saveChoice(key, null); closeSheet(); });
+  sheet.querySelector('[data-close]').onclick = done;
+  sheet.querySelector('[data-clear]')?.addEventListener('click', async () => { await saveChoice(key, null); done(); });
   sheet.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', async () => {
     const sz = opts[+b.dataset.size];
     await saveChoice(key, { name: sizeLbl(sz), sizeText: sizeLbl(sz) });
-    closeSheet();
+    done();
     toast('Gekozen');
   }));
   sheet.querySelector('[data-own]').addEventListener('click', async () => {
@@ -528,7 +534,7 @@ async function chooseSheet(key, watchId) {
     if (!sizeText && !normal) { toast('Vul de inhoud en/of de normale prijs in'); return; }
     if (sizeText && !parseSize(sizeText)) { toast('Inhoud niet herkend; schrijf bijvoorbeeld 300 g of 1,5 liter'); return; }
     await saveChoice(key, { name: sizeText || 'eigen invoer', sizeText, normal: Number.isFinite(normal) ? normal : null });
-    closeSheet();
+    done();
     toast('Gekozen');
   });
   const list = sheet.querySelector('[data-list]');
@@ -562,7 +568,7 @@ async function chooseSheet(key, watchId) {
   list.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
     const r = rows[+b.dataset.pick];
     await saveChoice(key, { name: r.name, sizeText: r.sizeText || (r.sizeAmount ? sizeLbl({ amount: r.sizeAmount, unit: r.sizeUnit }) : ''), normal: r.price });
-    closeSheet();
+    done();
     toast('Gekozen');
   }));
 }
