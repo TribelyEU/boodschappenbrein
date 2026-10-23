@@ -79,8 +79,7 @@ export default {
     const byId = new Map(meals.map((m) => [m.id, m]));
     return html`
       <div class="page-head"><div><h1>Weekmenu</h1></div>
-        <div class="gap8"><button class="btn small" data-action="newMeal">${icon('plus', 16)}Eigen</button>
-        <button class="btn small primary" data-action="recipes">${icon('search', 16)}Recept zoeken</button></div></div>
+        <button class="btn small primary" data-action="recipes">${icon('search', 16)}Recept zoeken</button></div>
       <div class="between" style="margin-bottom:10px">
         <button class="btn small" data-action="week" data-d="-1">${icon('back', 14)}</button>
         <strong>Week van ${formatDate(monday)}</strong>
@@ -98,7 +97,8 @@ export default {
       })}</div></div>
       <button class="btn primary block" style="margin-top:12px" data-action="toList" data-monday="${monday}">${icon('list', 18)}Ingrediënten van deze week op de lijst</button>
 
-      <div class="section-label">Gerechten</div>
+      <div class="between" style="margin:22px 2px 8px"><div class="section-label" style="margin:0">Gerechten</div>
+        <button class="btn small ghost" data-action="newMeal">${icon('plus', 14)}Eigen gerecht</button></div>
       ${meals.length ? html`<div class="card tight"><div class="rows">${meals.map((m) => {
         const deals = dealsFor(m);
         return html`<div class="row-item clickable" data-action="editMeal" data-id="${m.id}">
@@ -156,7 +156,7 @@ function weekToList(monday) {
     closeSheet();
     for (const it of chosen) {
       const p = matchIngredient(it.name);
-      await addToList({ name: p?.name || it.name, productId: p?.id, category: p?.category, qty: Math.max(1, it.qty), note: it.amounts.join(' + '), source: 'menu' });
+      await addToList({ name: p?.name || it.name.charAt(0).toUpperCase() + it.name.slice(1), productId: p?.id, category: p?.category, qty: Math.max(1, it.qty), note: it.amounts.join(' + '), source: 'menu' });
     }
     toast(`${chosen.length} ingrediënten op de lijst`);
   });
