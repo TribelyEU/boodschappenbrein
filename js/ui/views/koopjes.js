@@ -55,6 +55,16 @@ function details(x) {
   return parts.join(' · ');
 }
 
+/** Afbeelding van de winkel (laadt pas als hij in beeld komt; verdwijnt als hij niet laadt). */
+function thumb(o, size = 56) {
+  if (!o.image) return '';
+  return html`<img src="${o.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:8px;background:#fff;flex:none">`;
+}
+function offerLink(o, label = null) {
+  if (!o.url) return '';
+  return html`<a href="${o.url}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">${label || `Bekijk bij ${storeName(o.store)}`} ↗</a>`;
+}
+
 function offerRow(x, item) {
   const o = x.offer;
   const r = x.rating;
@@ -62,15 +72,17 @@ function offerRow(x, item) {
   if (o.was && x.packPrice != null && o.was > x.packPrice) facts.push(`van ${euro(o.was)}`);
   if (x.perUnit == null && x.discount != null) facts.push(`${pct(x.discount)} korting`);
   if (x.perUnit == null && !x.size && x.packPrice != null) facts.push('inhoud niet vermeld');
-  return html`<div class="row-item" style="align-items:flex-start;flex-wrap:wrap;gap:8px">
-    <div class="grow" style="min-width:60%">
+  return html`<div class="row-item" style="align-items:flex-start;flex-wrap:wrap;gap:10px">
+    ${thumb(o)}
+    <div class="grow" style="min-width:45%">
       <div class="title" style="white-space:normal">${storeName(o.store)}${x.label === 'koopje' ? html` <span class="chip good">Koopje</span>` : ''}${x.equiv === 'ref' ? html` <span class="chip info">Wat jullie kopen</span>` : x.equiv === 'equiv' ? html` <span class="chip info">Gelijkwaardig</span>` : ''}</div>
       <div class="small" style="white-space:normal;color:var(--ink-2)">${o.title}</div>
       <div class="tiny muted" style="white-space:normal;margin-top:2px">${details(x)}${facts.length ? ` · ${facts.join(' · ')}` : ''}</div>
       ${vsRef(x, item)}
     </div>
     <div style="text-align:right;min-width:72px">${priceBlock(x, item)}</div>
-    <div style="width:100%;display:flex;gap:8px;justify-content:flex-end">
+    <div style="width:100%;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+      <span style="margin-right:auto">${offerLink(o)}</span>
       ${r ? html`
         <span class="chip ${r.interesting ? 'good' : ''}" style="align-self:center">${r.interesting ? 'Interessant' : 'Niet interessant'}</span>
         <button class="btn small ghost" data-action="unrate" data-key="${x.key}">Wijzig</button>
@@ -216,12 +228,14 @@ function swipeSheet() {
     box.innerHTML = `
       <div class="small muted" style="text-align:center">${i + 1} van ${queue.length} · ${esc(item.name)}</div>
       <div class="card" data-card style="margin:12px 0;touch-action:pan-y;transition:transform .2s;user-select:none">
+        ${o.image ? `<img src="${esc(o.image)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()" draggable="false" style="display:block;width:100%;max-height:180px;object-fit:contain;margin-bottom:10px;pointer-events:none">` : ''}
         <div class="between"><strong style="font-size:18px">${esc(storeName(o.store))}</strong>${x.label === 'koopje' ? '<span class="chip good">Koopje</span>' : ''}</div>
         <div style="margin-top:6px">${esc(o.title)}</div>
         <div class="small muted" style="margin-top:4px">${esc(details(x))}</div>
         <div style="margin-top:14px;font-size:30px;font-weight:800" class="num">${x.perUnit != null ? `${esc(euro(x.perUnit))} <span class="small muted" style="font-weight:500">per ${esc(unitLabel(item))}</span>` : x.packPrice != null ? `${esc(euro(x.packPrice))} <span class="small muted" style="font-weight:500">per stuk/pak</span>` : esc(o.mechanism || '')}</div>
         ${o.was && x.packPrice != null && o.was > x.packPrice ? `<div class="small muted">van ${esc(euro(o.was))}</div>` : ''}
         ${x.perUnit == null && x.discount != null ? `<div class="small muted">${pct(x.discount)} korting</div>` : ''}
+        ${o.url ? `<div style="margin-top:8px"><a href="${esc(o.url)}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">Bekijk bij ${esc(storeName(o.store))} ↗</a></div>` : ''}
         ${own ? `<div class="tiny muted" style="margin-top:10px">Laatst zelf betaald: ${own.perUnit != null ? `${esc(euro(own.perUnit))} per ${esc(unitLabel(item))}` : `${esc(euro(own.perPack))} per stuk/pak`} (${esc(storeName(own.store))})</div>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">

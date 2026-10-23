@@ -48,7 +48,7 @@ function dealLine(deal) {
   const unit = deal.watch ? unitOf(deal.watch).label : null;
   const what = o.mechanism || (deal.packPrice != null ? `voor ${euro(deal.packPrice)}` : 'aanbieding');
   const per = deal.perUnit != null && unit ? ` · ${euro(deal.perUnit)} per ${unit}` : '';
-  return html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} ${storeName(o.store)}: ${what}${per}${deal.count > 1 ? ` · nog ${deal.count - 1} andere` : ''}</div>`;
+  return html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} ${storeName(o.store)}: ${what}${per}${deal.count > 1 ? ` · nog ${deal.count - 1} andere` : ''}${o.url ? html` · <a href="${o.url}" target="_blank" rel="noopener noreferrer">bekijk ↗</a>` : ''}</div>`;
 }
 
 function encodeList(items) {

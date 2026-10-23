@@ -68,7 +68,7 @@ export function parseAhSection(json, period) {
         out.push({
           id: `ah:g${g.id || hash(g.segmentDescription)}`, store: 'ah', title: g.segmentDescription, brand: null, size: null,
           price: cents(g.exampleForPrice), was: cents(g.exampleFromPrice), mechanism: g.discountDescription || null,
-          validFrom: period.start || null, validTo: period.end || null, source: 'ah', group: true, url: 'https://www.ah.nl/bonus', image: ahImage(g.images),
+          validFrom: period.start || null, validTo: period.end || null, source: 'ah', group: true, url: `https://www.ah.nl/zoeken?query=${encodeURIComponent(String(g.segmentDescription || '').replace(/^alle\s+/i, ''))}`, image: ahImage(g.images),
         });
       }
     }
