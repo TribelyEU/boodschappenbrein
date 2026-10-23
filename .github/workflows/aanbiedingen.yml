@@ -1,0 +1,68 @@
+# Boodschappenbrein: haalt elke ochtend de aanbiedingen op en publiceert de app op GitHub Pages.
+# Er staan hier geen persoonlijke gegevens: alleen de app en openbare aanbiedingen.
+name: Aanbiedingen en app
+
+on:
+  schedule:
+    - cron: '20 4 * * *'   # elke dag rond 06:20 Nederlandse tijd (zomertijd; 05:20 in de winter)
+  workflow_dispatch:        # handmatig starten via de knop "Run workflow"
+    inputs:
+      debug:
+        description: 'Folderz-pagina’s bewaren voor diagnose (data/debug)'
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths-ignore: ['data/**']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: boodschappenbrein
+  cancel-in-progress: false
+
+jobs:
+  bijwerken:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tests
+        run: node --test tests/*.test.js
+
+      - name: Aanbiedingen ophalen
+        id: fetch
+        continue-on-error: true
+        env:
+          DEBUG_HTML: ${{ github.event_name == 'workflow_dispatch' && inputs.debug && '1' || '' }}
+        run: node scripts/fetch-offers.mjs
+
+      - name: Opslaan in de repository
+        run: |
+          git config user.name "boodschappenbrein-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then echo "Geen wijzigingen."; else git commit -m "Aanbiedingen bijgewerkt" && git push; fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Melden als ophalen mislukte
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::Er konden geen aanbiedingen worden opgehaald. De app gebruikt de vorige gegevens. Zie de stap 'Aanbiedingen ophalen' voor details."
+          exit 1

@@ -1,0 +1,4 @@
+# Echte (geanonimiseerde) bonnen alleen lokaal houden, niet publiceren
+tests/fixtures/ah-*.txt
+node_modules/
+.DS_Store
