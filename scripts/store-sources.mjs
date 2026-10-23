@@ -98,19 +98,36 @@ export function parseDirk(html) {
   if (!Array.isArray(groups)) throw new Error('Dirk: lijst met aanbiedingen niet gevonden');
   const list = [];
   for (const g of groups) for (const o of g?.currentOffers || []) {
-    const price = cents(o.offerPrice);
-    const was = cents(o.normalPrice);
     const sign = clean(String(o.textPriceSign || '').replace(/_/g, ' '));
     const multi = sign && sign.match(/(\d+)\s*voor/i);
     const free = sign && sign.match(/\d+\s*\+\s*\d+(?:\s*gratis)?|\d+e\s*(?:gratis|halve prijs)/i);
-    list.push({
-      ref: o.offerId, title: o.headerText, size: String(o.packaging || '').replace(/OP=OP/gi, '').replace(/\.\s*$/, ''), brand: o.products?.[0]?.productInformation?.brand || null,
-      price: multi || free ? null : price, was: multi || free ? null : was,
-      mechanism: multi && price ? `${multi[1]} voor ${euroText(price)}` : free ? free[0] : price ? `voor ${euroText(price)}` : null,
+    const base = {
       // Dirk zet lokale datums met een "Z" erachter (2026-10-25T23:59Z = zondag 25 okt): datumdeel overnemen.
       validFrom: String(o.startDate || '').slice(0, 10) || null, validTo: String(o.endDate || '').slice(0, 10) || null, url: 'https://www.dirk.nl/aanbiedingen',
-      image: dirkImage(o.products?.[0]?.productInformation?.image || o.image),
-    });
+    };
+    const make = (ref, title, size, priceRaw, wasRaw, brand, image) => {
+      const price = cents(priceRaw);
+      const was = cents(wasRaw);
+      return { ...base, ref, title, size, brand: brand || null,
+        price: multi || free ? null : price, was: multi || free ? null : was,
+        mechanism: multi && price ? `${multi[1]} voor ${euroText(price)}` : free ? free[0] : price ? `voor ${euroText(price)}` : null,
+        image: dirkImage(image) };
+    };
+    const offerSize = String(o.packaging || '').replace(/OP=OP/gi, '').replace(/\.\s*$/, '').trim();
+    // De actie zegt vaak alleen "Per pak"; de inhoud staat bij de producten ("300 g"). Elk product wordt dan een eigen regel,
+    // met zijn eigen naam, inhoud en prijs (bij "Entrecote of ribeye" verschillen die).
+    const prods = (o.products || []).filter((p) => p?.productInformation);
+    const hasSize = (t) => /\d\s*(g|gr|gram|kg|kilo|ml|cl|l|liter|stuks?)\b/i.test(t || '');
+    // Alleen als de productprijzen gelijk zijn aan de actieprijs; anders is niet duidelijk welke prijs bij welke inhoud hoort.
+    const samePrice = prods.every((p) => p.offerPrice == null || Math.abs(p.offerPrice - o.offerPrice) < 0.015);
+    if (prods.length && samePrice && !hasSize(offerSize) && prods.some((p) => hasSize(p.productInformation.packaging))) {
+      for (const p of prods) {
+        const pi = p.productInformation;
+        list.push(make(`${o.offerId}-${p.productId}`, pi.headerText || o.headerText, pi.packaging || offerSize, p.offerPrice ?? o.offerPrice, p.normalPrice ?? o.normalPrice, pi.brand, pi.image || o.image));
+      }
+    } else {
+      list.push(make(o.offerId, o.headerText, offerSize, o.offerPrice, o.normalPrice, prods[0]?.productInformation?.brand, prods[0]?.productInformation?.image || o.image));
+    }
   }
   return finish('dirk', list);
 }
@@ -173,6 +190,13 @@ export function parseHoogvliet(html) {
       mechanism = top; // "1 + 1 Gratis", "2e halve prijs", "25% korting"
     }
     if (!price && !mechanism) continue;
+    // Inhoud uit de productgegevens ("500 Gram") als het actielabel die niet noemt, alleen bij één product (geen "A of B").
+    const attr = it.sub_title_attributes;
+    const single = !it.is_promotion_group || (it.enabled_child_skus || it.child_skus || []).length <= 1;
+    if (!size && single && attr?.volume && attr.unit) {
+      const v = String(attr.volume).replace('.', ',');
+      size = /^stuk/i.test(attr.unit) ? (+attr.volume > 1 ? `${v} stuks` : null) : `${v} ${attr.unit.toLowerCase()}`;
+    }
     list.push({
       ref: it.sku, title: it.display_name || it.name, size, brand: null, price, was, mechanism,
       validFrom: day(String(meta.valid_from || per.validFrom || '').replace(' ', 'T').replace(/\+00$/, 'Z')),

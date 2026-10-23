@@ -148,7 +148,10 @@ const usable = (o) => parseMechanism(o.mechanism, o) || o.price != null;
 
 realTest('dirk', 'echte Dirk-pagina (23 okt 2026)', (html) => {
   const o = parseDirk(html);
-  assert.equal(o.length, 116);
+  assert.equal(o.length, 129, 'acties met meerdere producten (zelfde prijs, eigen inhoud) worden losse regels');
+  const gh = o.find((x) => /rundergehakt extra mager/i.test(x.title));
+  assert.deepEqual([gh.size, gh.price, gh.was], ['300 g', 399, 439], 'inhoud staat bij het product, niet bij de actie ("Per pak")');
+  assert.equal(o.find((x) => /Entrecote of ribeye/.test(x.title)).size, 'Per pak', 'andere prijzen per product: niet raden');
   assert.ok(o.every(usable));
   const bk = o.find((x) => /Boerenkool grof/.test(x.title));
   assert.deepEqual([bk.price, bk.was, bk.validTo], [99, 195, '2026-10-27']);
