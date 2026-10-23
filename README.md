@@ -132,9 +132,9 @@ Zo kunnen kleine afwijkingen in het tempo zich niet maandenlang opstapelen; het 
   - **Albert Heijn:** onofficiële app-API met anoniem token (`/mobile-auth/v1/auth/token/anonymous`,
     `/mobile-services/bonuspage/v3/metadata`, `/mobile-services/bonuspage/v2/section`), zoals in github.com/gwillem/appie-go.
     Alleen landelijke Bonus, geen persoonlijke Bonus Box.
-  - **Lidl, Hoogvliet, Jumbo, Dirk, Action, Wibra, Kruidvat** (instelbaar met `STORES=`): winkelpagina's van Folderz.nl.
-    De parser probeert ingesloten JSON en daarna HTML-blokken. Herkent hij niets, dan wordt de pagina bewaard in
-    `data/debug/` om de parser te kunnen bijwerken.
+  - **Andere winkels:** de Folderz-ondersteuning zit in de code (`STORES=lidl,…`), maar staat **uit**. Bij de eerste
+    echte run (23 okt 2026) bleek Folderz automatische toegang te blokkeren met een AWS-WAF-controle. Die blokkade wordt
+    bewust niet omzeild. Herkent het script zo'n controle, dan meldt het dat en stopt het voor die winkel.
   - Mislukt alles, dan blijft het vorige bestand staan en faalt de run, zodat GitHub een e-mail stuurt.
 - `.github/workflows/aanbiedingen.yml` draait dagelijks om ±06:20, bij elke push en handmatig. Het publiceert de app
   op GitHub Pages; aanbiedingen en app staan dan op hetzelfde adres.

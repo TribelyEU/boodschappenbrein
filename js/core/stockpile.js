@@ -143,6 +143,7 @@ export function effectiveDeal(deal, normal) {
       return { unitPrice: Math.round((normal * buy) / (buy + free)), bundle: buy + free, label: `${buy}+${free} gratis` };
     }
     case 'tweedehalf': return { unitPrice: Math.round(normal * 0.75), bundle: 2, label: '2e halve prijs' };
+    case 'eurokorting': return { unitPrice: Math.max(0, normal - deal.amount), bundle: 1, label: `${(deal.amount / 100).toFixed(2).replace('.', ',')} korting` };
     case 'xvoor': return { unitPrice: Math.round(deal.total / deal.n), bundle: deal.n, label: `${deal.n} voor ${(deal.total / 100).toFixed(2).replace('.', ',')}` };
     default: throw new Error('Onbekend actietype');
   }

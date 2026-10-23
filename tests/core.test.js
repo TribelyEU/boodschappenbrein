@@ -711,6 +711,9 @@ test('actieteksten herkennen (AH en Folderz)', () => {
   assert.deepEqual(parseMechanism('55% KORTING'), { type: 'pct', pct: 55 });
   assert.deepEqual(parseMechanism('voor 2.49'), { type: 'prijs', price: 249 });
   assert.deepEqual(parseMechanism('1 euro korting', { was: 499 }), { type: 'prijs', price: 399 });
+  assert.deepEqual(parseMechanism('2.50 EURO KORTING'), { type: 'eurokorting', amount: 250 }, 'AH-groepsactie zonder prijs');
+  assert.deepEqual(parseMechanism('2e GRATIS'), { type: 'gratis', buy: 1, free: 1 });
+  assert.deepEqual(parseMechanism('VOOR 0.99'), { type: 'prijs', price: 99 });
   assert.deepEqual(parseMechanism('', { price: 349, was: 599 }), { type: 'prijs', price: 349 });
   assert.equal(parseMechanism('25% extra inhoud'), null);
   assert.equal(parseMechanism('Op = op'), null);
@@ -739,6 +742,23 @@ test('aanbieding koppelen: zelfde basisproduct, merk wordt meegewogen', () => {
   assert.equal(m2[0].productId, s.was);
   assert.equal(matchOffer({ title: 'Haribo Goudbeertjes' }, s.memory.products, brands).length, 0);
   assert.equal(matchOffer({ title: 'AH Volle melk 1L' }, s.memory.products, brands).length, 0, 'volle melk ≠ halfvolle melk');
+});
+
+test('aanbieding koppelen: geen losse woorddelen (echte fouten uit de eerste AH-run)', () => {
+  const { memory, lines } = storeAll([
+    ...buys('DZH RASP', [['2026-10-01', 1, 249], ['2026-10-08', 1, 249]], 'ah'),
+    ...buys('AH RIJSTWAF', [['2026-10-01', 2, 89]], 'ah'),
+    ...buys('AH SOEPGROEN', [['2026-10-01', 1, 129]], 'ah'),
+    ...buys('MAALTIJD', [['2026-10-01', 1, 699]], 'ah'),
+  ]);
+  const brands = brandsByProduct(lines);
+  const names = (title) => matchOffer({ title }, memory.products, brands).map((m) => memory.products.get(m.productId).name);
+  assert.deepEqual(names('Clipper Glow for it raspberry & lemon'), []);
+  assert.deepEqual(names('Alle Lassie en Tilda rijst'), []);
+  assert.deepEqual(names('Alle AH Verse soepen 500 gram'), []);
+  assert.deepEqual(names('Alle De Vegetarische Slager maaltijdcomponenten'), []);
+  assert.deepEqual(names('Alle AH Uit Eigen Keuken maaltijden'), ['Maaltijd'], 'meervoud mag wel');
+  assert.deepEqual(names('AH Geraspte kaas'), [], 'geraspt ≠ rasp');
 });
 
 test('weekoverzicht: inslagadvies, vast product, schijnkorting en verlopen actie', () => {

@@ -28,8 +28,8 @@ function statusCard() {
       <div class="qa" style="flex-wrap:wrap">${mine.map((id) => {
         const s = sources[id];
         const good = s?.ok && s.count > 0;
-        const label = good ? ` · ${s.count}` : s?.ok || (s && !s.error) ? ' · 0 gevonden' : s ? ' · mislukt' : ' · niet opgehaald';
-        return html`<span class="chip ${good ? 'good' : s?.error ? 'bad' : s ? 'warn' : 'muted'}" title="${s?.error || s?.note || ''}">${storeName(id)}${label}</span>`;
+        const label = good ? ` · ${s.count}` : s?.ok || (s && !s.error) ? ' · 0 gevonden' : s ? ' · mislukt' : ' · geen automatische bron';
+        return html`<span class="chip ${good ? 'good' : s?.error ? 'bad' : s ? 'warn' : 'muted'}" title="${s?.error || s?.note || (s ? '' : 'Beoordeel aanbiedingen van deze winkel zelf via Voorraad → Inslag → Aanbieding beoordelen')}">${storeName(id)}${label}</span>`;
       })}</div>`
       : html`<p class="small muted" style="margin-top:-4px">${rec?.error ? `Ophalen lukte niet: ${rec.error}.` : st.reason || 'Nog geen aanbiedingen geladen.'} De aanbiedingen worden elke ochtend opgehaald door een klein script op GitHub; zie de installatiegids (LEESMIJ.md).</p>`}
     ${rec?.error && st.ok ? html`<p class="small" style="color:var(--warn)">Laatste poging mislukt: ${rec.error}. De vorige gegevens worden getoond.</p>` : ''}
@@ -101,7 +101,8 @@ export function offersView() {
       ${searchResults()}` : ''}
     <details class="card" style="margin-top:14px"><summary>Waar komen deze aanbiedingen vandaan?</summary>
       <div class="small muted" style="margin-top:8px">
-        <p>Elke ochtend haalt een klein script op GitHub de openbare aanbiedingen op: Albert Heijn via de (onofficiële) app-API, de andere winkels via Folderz.nl. Jullie aankopen gaan daar nooit naartoe; de vergelijking gebeurt op dit apparaat.</p>
+        <p>Elke ochtend haalt een klein script op GitHub de openbare Bonus-aanbiedingen van Albert Heijn op via de (onofficiële) app-API. Jullie aankopen gaan daar nooit naartoe; de vergelijking gebeurt op dit apparaat.</p>
+        <p>Voor de andere winkels is er (nog) geen bron die automatische toegang toestaat: Folderz.nl blokkeert dit bewust, en die blokkade omzeilt de app niet. Zie je in een folder iets interessants, gebruik dan <strong>Voorraad → Inslag → Aanbieding beoordelen</strong>.</p>
         <p>Beide bronnen zijn onofficieel en kunnen veranderen. Lukt het ophalen niet, dan ziet u dat hierboven per winkel; de vorige gegevens blijven dan staan en de rest van de app werkt gewoon.</p>
         <p>Persoonlijke Bonus Box-aanbiedingen uit de AH-app zitten er niet in: die vragen om inloggen.</p>
       </div></details>`;

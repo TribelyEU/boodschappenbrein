@@ -8,9 +8,9 @@ on:
   workflow_dispatch:        # handmatig starten via de knop "Run workflow"
     inputs:
       debug:
-        description: 'Folderz-pagina’s bewaren voor diagnose (data/debug)'
+        description: 'Opgehaalde pagina’s bewaren voor diagnose (data/debug)'
         type: boolean
-        default: true
+        default: false
   push:
     branches: [main]
     paths-ignore: ['data/**']
@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Tests
         run: node --test tests/*.test.js

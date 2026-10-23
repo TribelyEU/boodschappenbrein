@@ -231,6 +231,7 @@ export async function fetchFolderz(fetchImpl = fetch, store, { today, log = () =
       if (r.status === 404) { lastErr = new Error(`404 voor ${slug}`); continue; }
       if (!r.ok) throw new Error(`${r.status} voor ${slug}`);
       const html = await r.text();
+      if (/awsWafIntegration|challenge-container|captcha/i.test(html)) throw new Error('Folderz blokkeert automatische toegang (anti-botcontrole); niet omzeild');
       const res = parseFolderz(html, store, today);
       log(`Folderz ${store}: ${res.offers.length} aanbiedingen (methode: ${res.method})`);
       return { ...res, slug, html: keepHtml || !res.offers.length ? html : null };

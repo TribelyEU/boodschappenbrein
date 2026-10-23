@@ -10,7 +10,9 @@ import { dirname, join } from 'node:path';
 import { fetchAh, fetchFolderz } from './offer-sources.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const STORES = (process.env.STORES || 'ah,lidl,hoogvliet,jumbo,dirk,action,wibra,kruidvat').split(',').map((s) => s.trim()).filter(Boolean);
+// Standaard alleen AH. Folderz blokkeert automatische toegang (AWS-WAF-controle, okt. 2026); die blokkade omzeilen we niet.
+// Andere winkels kunnen later worden toegevoegd zodra er een bron is die automatische toegang toestaat.
+const STORES = (process.env.STORES || 'ah').split(',').map((s) => s.trim()).filter(Boolean);
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' }); // JJJJ-MM-DD
 const keepHtml = process.env.DEBUG_HTML === '1';
 const log = (...a) => console.log(...a);

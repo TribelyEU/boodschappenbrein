@@ -33,21 +33,30 @@ export function parseMechanism(text, { price = null, was = null } = {}) {
     if (n >= 2 && n <= 20) return { type: 'xvoor', n, total: num(m[2]) };
   }
   if ((m = t.match(/(\d{1,2})\s*%\s*(?:korting|voordeel)?/)) && !/extra|gratis/.test(t)) return { type: 'pct', pct: +m[1] };
-  if ((m = t.match(/(\d+(?:\.\d{2})?)\s*(?:euro\s*)?korting/)) && was) return { type: 'prijs', price: was - num(m[1]) };
+  if ((m = t.match(/(\d+(?:\.\d{2})?)\s*euro\s*korting/) || t.match(/(\d+\.\d{2})\s*korting/))) return was ? { type: 'prijs', price: was - num(m[1]) } : { type: 'eurokorting', amount: num(m[1]) };
   if ((m = t.match(/\bvoor\s*(?:eur\s*)?(\d+\.\d{2})/))) return { type: 'prijs', price: num(m[1]) };
   if (price != null && was != null && price < was) return { type: 'prijs', price };
   return null;
 }
 
-const OFFER_STOP = new Set(['alle', 'keuze', 'uit', 'het', 'hele', 'assortiment', 'diverse', 'soorten', 'varianten', 'combineren', 'mix', 'match', 'nieuw', 'combi']);
+const OFFER_STOP = new Set(['ah', 'alle', 'keuze', 'uit', 'het', 'hele', 'assortiment', 'diverse', 'soorten', 'varianten', 'combineren', 'mix', 'match', 'nieuw', 'combi']);
 
 export function offerTokens(offer) {
   const base = productTokens(offer.title).filter((t) => !OFFER_STOP.has(t));
   return [...new Set(base)];
 }
 
+// Woord uit de productnaam (token) tegen woorden uit de aanbieding (list):
+//  - exact, of meervoud/verbuiging (verschil ≤ 2 letters: maaltijd ↔ maaltijden);
+//  - afkorting van de bon (halfv → halfvolle) alleen als het verschil klein is of het woord lang genoeg:
+//    zo wordt "rasp" (geraspte kaas) geen "raspberry", "rijstwaf" geen "rijst" en "maaltijd" geen "maaltijdcomponenten".
 function covers(token, list) {
-  return list.some((u) => u === token || (token.length >= 4 && u.startsWith(token)) || (u.length >= 4 && token.startsWith(u) && token.length - u.length <= 3));
+  return list.some((u) => {
+    if (u === token) return true;
+    if (u.startsWith(token)) return token.length >= 4 && u.length - token.length <= 3;
+    if (token.startsWith(u)) return u.length >= 4 && token.length - u.length <= 2;
+    return false;
+  });
 }
 
 /**
@@ -105,7 +114,7 @@ export function adviseOffer(offer, match, ctx) {
   // 1. Op de inslaglijst → volledig inslagadvies
   const entry = (ctx.stockpile || []).find((e) => e.members.some((m) => m.productId === product.id));
   if (entry) {
-    if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return null;
+    if (normal == null && deal.type !== 'prijs' && deal.type !== 'xvoor') return null; // ook eurokorting heeft een normale prijs nodig
     const a = adviseDeal(entry, product.id, { ...deal, normal, size: size || undefined }, ctx);
     if (a.verdict !== 'inslaan' && a.verdict !== 'redelijk') return { ...base, kind: 'inslag', verdict: a.verdict, saving: 0, advice: a };
     return { ...base, kind: 'inslag', entryId: entry.id, verdict: a.verdict, qty: a.buyPacks, saving: Math.max(0, a.saving || 0), effBase: a.effBase, unitLabel: a.unitLabel, advice: a };

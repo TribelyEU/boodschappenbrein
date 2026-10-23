@@ -4,8 +4,9 @@ Met deze stappen gebeuren er twee dingen tegelijk:
 
 1. **De app krijgt een eigen webadres** (`https://JOUWNAAM.github.io/boodschappenbrein/`), dat je op je iPhone en
    computer opent en op het beginscherm zet. Geen computer meer nodig die aan moet staan.
-2. **Elke ochtend worden de aanbiedingen opgehaald** (AH, Lidl, Hoogvliet, Jumbo, Dirk, Action, Wibra en Kruidvat) en in
-   de app getoond onder **Prijzen → Aanbiedingen**.
+2. **Elke ochtend worden de Bonus-aanbiedingen van Albert Heijn opgehaald** en in de app getoond onder
+   **Prijzen → Aanbiedingen**, vergeleken met wat jullie zelf normaal betalen. (Voor andere winkels is er nog geen bron
+   die automatische toegang toestaat.)
 
 Alles is gratis. Reken op ±15 minuten.
 
@@ -57,9 +58,8 @@ Alles is gratis. Reken op ±15 minuten.
 2. Klik links op **Aanbiedingen en app**.
 3. Klik rechts op **Run workflow** en dan op de groene knop **Run workflow**.
 4. Wacht 2 à 3 minuten. Een **groen vinkje** betekent dat het gelukt is.
-5. Klik op de run en daarna op **bijwerken → Aanbiedingen ophalen** om per winkel te zien hoeveel aanbiedingen er
-   binnenkwamen. Staat er bij een winkel `NEE` of `0`, stuur dan het logboek naar Claude: met de opgeslagen pagina in
-   `data/debug/` is het snel te repareren.
+5. Klik op de run en daarna op **bijwerken → Aanbiedingen ophalen** om te zien hoeveel AH-aanbiedingen er
+   binnenkwamen (bij de eerste run: 174).
 
 ### Stap 5: De app openen
 1. Ga naar **Settings → Pages**. Bovenaan staat: *Your site is live at* `https://JOUWNAAM.github.io/boodschappenbrein/`.
@@ -87,6 +87,5 @@ Je kunt ook gewoon opnieuw je bonnen importeren: dubbele bonnen worden herkend.
   uitgepakte zip, en klik **Commit changes**.
 - **Rode run bij "deploy".** Controleer stap 3 (Pages → Source → GitHub Actions) en start de run opnieuw.
 - **De app toont "bestand niet gevonden".** De eerste run is nog niet klaar of is mislukt; zie stap 4.
-- **Een winkel geeft steeds 0.** Waarschijnlijk is de pagina van Folderz veranderd. Start de run met
-  **Run workflow** (het vinkje *Folderz-pagina's bewaren* staat standaard aan) en stuur Claude het bestand
-  `data/debug/WINKEL.html` of het logboek.
+- **AH geeft 0 aanbiedingen of 'mislukt'.** Waarschijnlijk is de (onofficiële) AH-app-API veranderd. Stuur Claude het
+  logboek van de stap *Aanbiedingen ophalen*; de app blijft intussen werken met de vorige aanbiedingen.
