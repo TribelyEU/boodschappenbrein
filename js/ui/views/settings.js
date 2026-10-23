@@ -3,6 +3,7 @@ import { html, icon, toast, confirmSheet, download } from '../dom.js';
 import { STORES, storeName } from '../../core/stores.js';
 import { formatDate, todayISO, localDateOf } from '../../core/dates.js';
 import { validateBackup } from '../../core/backup.js';
+import { currentVersion, checkForUpdate, reloadApp } from '../../app/update.js';
 
 let usage = null;
 
@@ -59,10 +60,20 @@ export default {
           <p class="muted small">Verwijdert alle gegevens in de ${state.mode === 'demo' ? 'demo-' : ''}database op dit apparaat. Maak eerst een back-up.</p>
           <button class="btn danger" data-action="wipe">${icon('trash', 16)}Alles wissen</button>
         </div>
+        <div class="card">
+          <div class="quiet-line"><h2 style="margin:0">App bijwerken</h2><span class="tiny muted">versie ${currentVersion() || '–'}</span></div>
+          <p class="muted small">De app werkt zichzelf bij als je hem opent. Lukt dat niet, tik dan hier.</p>
+          <button class="btn" data-action="update">Nu bijwerken</button>
+        </div>
         <p class="muted tiny">Boodschappenbrein 1.0 · lokale app zonder account · gegevens verlaten dit apparaat niet.</p>
       </div>`;
   },
   actions: {
+    async update() {
+      toast('Bijwerken…');
+      try { await checkForUpdate({ force: true }); } catch { toast('Geen verbinding'); return; }
+      reloadApp();
+    },
     async backup() {
       const b = await exportBackup();
       download(`boodschappenbrein-backup-${todayISO()}.json`, JSON.stringify(b));

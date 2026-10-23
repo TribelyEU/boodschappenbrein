@@ -1,5 +1,5 @@
 // Service worker: maakt de app offline bruikbaar (alleen de app zelf; gegevens staan in IndexedDB).
-const CACHE = 'boodschappenbrein-v1';
+const CACHE = 'boodschappenbrein-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -21,6 +21,7 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
   const cdn = /cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com/.test(url.host);
   if (!sameOrigin && !cdn) return; // prijsdata e.d. niet cachen
+  if (sameOrigin && url.pathname.endsWith('/version.json')) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     if (cdn) {
@@ -31,7 +32,8 @@ self.addEventListener('fetch', (event) => {
       return res;
     }
     try {
-      const res = await fetch(req);
+      // no-cache: altijd bij de server controleren of het bestand nieuwer is (anders houdt iOS het tot 10 min vast)
+      const res = await fetch(req, { cache: 'no-cache' });
       if (res.ok) cache.put(req, res.clone());
       return res;
     } catch {

@@ -154,7 +154,10 @@ async function start() {
   window.addEventListener('hashchange', onRoute);
   onRoute();
   if ('serviceWorker' in navigator && location.protocol !== 'file:' && !/^(localhost|127\.)/.test(location.hostname)) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
+    import('./app/update.js').then((u) => u.watchForUpdates({
+      onUpdate: () => import('./ui/dom.js').then((m) => m.toast('Er is een nieuwe versie', { action: 'Bijwerken', onAction: u.reloadApp, duration: 15000 })),
+    }));
   }
 }
 
