@@ -14,7 +14,9 @@ export function compactAssortment(json) {
   const stores = {};
   for (const it of items) {
     if (!ASSORTMENT_STORES.includes(it.store)) continue;
-    (stores[it.store] ||= []).push([it.name, it.price, it.sizeText || '']);
+    // AH: ook het productnummer (wi123456), voor de link "Naar AH"
+    const id = it.store === 'ah' ? (String(it.url || '').match(/\/wi(\d+)/) || [])[1] : null;
+    (stores[it.store] ||= []).push(id ? [it.name, it.price, it.sizeText || '', +id] : [it.name, it.price, it.sizeText || '']);
   }
   return stores;
 }
@@ -23,11 +25,11 @@ export function compactAssortment(json) {
 export function indexAssortment(stores) {
   const items = [];
   for (const [store, rows] of Object.entries(stores || {})) {
-    for (const [name, price, sizeText] of rows) {
+    for (const [name, price, sizeText, id] of rows) {
       // "16=24 rollen": 16 lange rollen = 24 gewone; voor een eerlijke prijs per rol tellen we 24
       const eq = String(name).match(/(\d+)\s*=\s*(\d+)\s*rol/i);
       const size = eq ? { amount: +eq[2], unit: 'st' } : parseSize(sizeText) || parseSize(name);
-      items.push({ store, name, price, sizeText, sizeAmount: size?.amount || null, sizeUnit: size?.unit || null });
+      items.push({ store, name, price, sizeText, sizeAmount: size?.amount || null, sizeUnit: size?.unit || null, id: id || null });
     }
   }
   return buildIndex(items);
@@ -54,7 +56,7 @@ export function suggestEquivalents(idx, query, { size = null, preferHouse = fals
     const results = cands.map((c) => {
       const it = c.item;
       const sameSize = Boolean(size && it.sizeUnit === size.unit && Math.abs(it.sizeAmount - size.amount) <= size.amount * 0.02);
-      return { name: it.name, price: it.price, sizeText: it.sizeText, sizeAmount: it.sizeAmount, sizeUnit: it.sizeUnit, unitPrice: c.unitPrice ?? unitPrice(it.price, it.sizeAmount ? { amount: it.sizeAmount, unit: it.sizeUnit } : null), sameSize, house: isHouse(it.name), score: c.score };
+      return { id: it.id || null, name: it.name, price: it.price, sizeText: it.sizeText, sizeAmount: it.sizeAmount, sizeUnit: it.sizeUnit, unitPrice: c.unitPrice ?? unitPrice(it.price, it.sizeAmount ? { amount: it.sizeAmount, unit: it.sizeUnit } : null), sameSize, house: isHouse(it.name), score: c.score };
     });
     // Eerst de beste naamovereenkomst (afgerond), dan zelfde inhoud, dan huismerk (als gewenst), dan prijs per eenheid.
     const band = (r) => Math.round(r.score * 4) / 4;

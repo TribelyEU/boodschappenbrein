@@ -1,4 +1,7 @@
-import { state, derived, saveMeal, deleteMeal, setPlan, addToList, loadRecipes } from '../../data/store.js';
+import { state, derived, saveMeal, deleteMeal, setPlan, addToList, loadRecipes, notifyChanged } from '../../data/store.js';
+import { matchIngredient, assortmentIndex, assortmentReady, priceFor } from '../../data/lookup.js';
+import { dishCost } from '../../core/ah.js';
+import { euro } from '../../core/money.js';
 import { parseIngredient, amountText, searchRecipes } from '../../core/recipes.js';
 import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
 import { addDays, startOfWeek, formatDate } from '../../core/dates.js';
@@ -12,13 +15,22 @@ import { matchOffer } from '../../core/offers.js';
 const DAYS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 let weekOffset = 0;
 
-function matchIngredient(name) {
-  const hits = findProducts(productTokens(name), state.products);
-  if (!hits.length) return null;
-  // Meest gekochte variant
-  const counts = new Map(hits.map((p) => [p.id, 0]));
-  for (const l of state.lines) if (counts.has(l.productId)) counts.set(l.productId, counts.get(l.productId) + 1);
-  return hits.sort((a, b) => counts.get(b.id) - counts.get(a.id))[0];
+let loadStarted = false;
+const costCache = new Map();
+/** Boodschappenkosten van een gerecht (hele verpakkingen, zonder wat meestal in huis is). */
+function costOf(meal) {
+  if (!assortmentReady() && !loadStarted) { loadStarted = true; assortmentIndex().then(notifyChanged).catch(() => {}); }
+  const key = `${meal.id}|${state.version}|${Boolean(assortmentReady())}`;
+  if (!costCache.has(key)) costCache.set(key, dishCost(meal.ingredients, priceFor));
+  return costCache.get(key);
+}
+function costLines(c) {
+  const src = (l) => (l.source === 'eigen' ? 'jullie prijs' : 'AH');
+  return `<div class="rows">${c.lines.map((l) => `<div class="row-item" style="min-height:0;padding:6px 0;gap:8px">
+      <span class="grow" style="white-space:normal;font-size:13px">${esc(l.ing.name)}<span class="muted tiny" style="display:block">${l.packs > 1 ? `${l.packs}× ` : ''}${esc(l.name)} · ${src(l)}</span></span>
+      <span class="num small">${euro(l.cost)}</span></div>`).join('')}</div>
+    ${c.missing.length ? `<p class="tiny" style="color:var(--warn);margin-top:6px">Geen prijs voor: ${esc(c.missing.join(', '))}</p>` : ''}
+    <p class="tiny muted" style="margin-top:4px">Hele verpakkingen, gewone prijzen. Wat meestal in huis is telt niet mee.</p>`;
 }
 
 /** Welke ingrediënten zijn deze week in de aanbieding (via de volglijst of een duidelijke naamovereenkomst)? */
@@ -52,6 +64,7 @@ function editMeal(meal = { name: '', ingredients: [], kids: true, favorite: fals
       <label class="field">Naam<input class="input" name="name" value="${esc(meal.name)}" required></label>
       <label class="field">Ingrediënten (één per regel, optioneel aantal ervoor: "2 paprika")
         <textarea class="input" name="ing" rows="8">${esc(meal.ingredients.map(ingLine).join('\n'))}</textarea></label>
+      ${meal.id && meal.ingredients.length ? (() => { const c = costOf(meal); return `<details class="card tight" style="margin:0"><summary class="small" style="font-weight:650">Boodschappen ${c.total != null ? euro(c.total) : 'prijs onvolledig'}</summary>${costLines(c)}</details>`; })() : ''}
       ${meal.url ? `<a href="${esc(meal.url)}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">Bereiding op lekkerensimpel.com ↗</a>` : ''}
       <label class="gap8"><input type="checkbox" name="kids" ${meal.kids ? 'checked' : ''}> Kindvriendelijk</label>
       <label class="gap8"><input type="checkbox" name="favorite" ${meal.favorite ? 'checked' : ''}> Favoriet</label>
@@ -101,11 +114,13 @@ export default {
         <button class="btn small ghost" data-action="newMeal">${icon('plus', 14)}Eigen gerecht</button></div>
       ${meals.length ? html`<div class="card tight"><div class="rows">${meals.map((m) => {
         const deals = dealsFor(m);
+        const cost = costOf(m);
         return html`<div class="row-item clickable" data-action="editMeal" data-id="${m.id}">
           ${m.image ? html`<img class="kp-thumb" src="${m.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" style="width:44px;height:44px;object-fit:cover">` : ''}
           <div class="grow"><div class="title">${m.favorite ? '★ ' : ''}${m.name}</div>
           <div class="sub">${[m.time ? `${m.time} min` : '', `${m.ingredients.length} ingrediënten`, m.kids ? 'kindvriendelijk' : ''].filter(Boolean).join(' · ')}</div>
           ${deals.length ? html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} In de aanbieding: ${deals.join(', ')}</div>` : ''}</div>
+          ${cost.total != null ? html`<span class="num" style="font-weight:700;white-space:nowrap">${euro(cost.total)}</span>` : ''}
           ${icon('chevron', 16)}
         </div>`;
       })}</div></div>` : html`<div class="card">${empty('Nog geen gerechten', 'Voeg jullie vaste gerechten toe, zoals pasta bolognese of nasi.')}</div>`}`;
@@ -156,7 +171,7 @@ function weekToList(monday) {
     closeSheet();
     for (const it of chosen) {
       const p = matchIngredient(it.name);
-      await addToList({ name: p?.name || it.name.charAt(0).toUpperCase() + it.name.slice(1), productId: p?.id, category: p?.category, qty: Math.max(1, it.qty), note: it.amounts.join(' + '), source: 'menu' });
+      await addToList({ name: p?.name || (/^ij/i.test(it.name) ? `IJ${it.name.slice(2)}` : it.name.charAt(0).toUpperCase() + it.name.slice(1)), productId: p?.id, category: p?.category, qty: Math.max(1, it.qty), note: it.amounts.join(' + '), source: 'menu' });
     }
     toast(`${chosen.length} ingrediënten op de lijst`);
   });
@@ -208,6 +223,7 @@ function recipePreview(r) {
     <p class="muted small" style="margin:2px 0 10px">${esc([r.time ? `${r.time} min` : '', r.cuisine?.[0] || ''].filter(Boolean).join(' · '))}</p>
     ${r.servings ? `<div class="seg" style="margin-bottom:8px">${[...new Set([r.servings, FAMILY, r.servings * 2])].sort((a, b) => a - b).slice(0, 3).map((n) => `<button data-p="${n}">${n} pers.</button>`).join('')}</div>` : ''}
     <div data-ings></div>
+    <div data-cost style="margin-top:10px"></div>
     <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" class="btn block" style="margin-top:12px">Bereiding op lekkerensimpel.com ↗</a>
     <label class="field" style="margin-top:12px">Inplannen
       <select class="input" data-day><option value="">Nog niet</option>${DAYS.map((d, i) => { const date = addDays(monday, i); return `<option value="${date}" ${state.plan.get(date) ? '' : ''}>${d} ${formatDate(date, 'short')}${state.plan.get(date) ? ' (bezet)' : ''}</option>`; }).join('')}</select></label>
@@ -219,7 +235,10 @@ function recipePreview(r) {
     box.innerHTML = `<div class="rows">${parsed.map((p) => `<div class="row-item" style="min-height:0;padding:7px 2px">
       <span class="num" style="width:76px;flex:none;font-weight:650">${esc(amountText(p, f))}</span>
       <span class="grow" style="white-space:normal">${esc(p.name)}${p.optional ? ' <span class="muted tiny">optioneel</span>' : ''}</span></div>`).join('')}</div>`;
+    const c = dishCost(parsed.map((p) => toIngredient(p, f)), priceFor);
+    sheet.querySelector('[data-cost]').innerHTML = `<details><summary class="quiet-line" style="cursor:pointer"><span class="small" style="font-weight:650">Boodschappen</span><strong class="num">${c.total != null ? euro(c.total) : `<span class="muted small">onvolledig</span>`}</strong></summary>${costLines(c)}</details>`;
   };
+  if (!assortmentReady()) assortmentIndex().then(() => sheet.isConnected && draw()).catch(() => {});
   draw();
   sheet.addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (b) { persons = +b.dataset.p; draw(); } });
   sheet.querySelector('[data-save]').addEventListener('click', async () => {

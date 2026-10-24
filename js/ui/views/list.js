@@ -9,6 +9,9 @@ import { dueRepeaters, repeaterCandidates } from '../../core/repeat.js';
 import { dealForListItem, unitOf } from '../../core/watch.js';
 import { matchOffer } from '../../core/offers.js';
 import { productTokens } from '../../core/products.js';
+import { ahLink, choiceKey, packsForListItem } from '../../core/ah.js';
+import { parseSize } from '../../core/products.js';
+import { assortmentIndex, ahSuggest, ahSearch, saveAhChoices } from '../../data/lookup.js';
 
 function categoryOf(item) {
   if (item.category) return item.category;
@@ -83,7 +86,8 @@ export default {
     return html`
       <div class="page-head">
         <div><h1>Boodschappen</h1><p class="muted">${open.length ? `${open.length} te halen` : 'Lijst is leeg'}${done.length ? ` · ${done.length} afgevinkt` : ''}</p></div>
-        <button class="btn small" data-action="share" ${state.list.length ? '' : 'disabled'}>${icon('share', 16)}Delen</button>
+        <div class="gap8"><button class="btn small" data-action="share" ${state.list.length ? '' : 'disabled'} aria-label="Delen">${icon('share', 16)}</button>
+        <button class="btn small primary" data-action="toAh" ${open.length ? '' : 'disabled'}>Naar AH</button></div>
       </div>
 
       ${incoming.length ? html`<div class="card" style="margin-bottom:14px">
@@ -147,6 +151,7 @@ export default {
     `;
   },
   actions: {
+    toAh() { ahSheet(); },
     async add(form) {
       const fd = new FormData(form);
       const name = String(fd.get('name') || '').trim();
@@ -240,4 +245,68 @@ function repeaterSheet() {
     await setSetting('repeaters', [...set]);
   });
   sheet.querySelector('[data-close]').onclick = closeSheet;
+}
+
+// ---------- naar het AH-mandje (via ah.nl) ----------
+async function ahSheet() {
+  const sheet = openSheet(`<h2>Naar AH</h2><div data-body><p class="muted small" style="padding:12px 0"><span class="spinner"></span> AH-producten zoeken…</p></div>`);
+  const body = sheet.querySelector('[data-body]');
+  let idx;
+  try { idx = await assortmentIndex(); } catch (e) { body.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; return; }
+  const rows = state.list.filter((i) => !i.checked).map((it) => {
+    const s = ahSuggest(idx, it.name, it.productId);
+    return { it, pick: s, on: Boolean(s), open: false };
+  });
+  const packs = (r) => packsForListItem(r.it, parseSize(r.pick?.sizeText) || parseSize(r.pick?.name));
+  const draw = () => {
+    const chosen = rows.filter((r) => r.on && r.pick);
+    const total = chosen.reduce((t, r) => t + r.pick.price * packs(r), 0);
+    body.innerHTML = `
+      <p class="muted small" style="margin:2px 0 8px">Controleer de producten. Daarna opent ah.nl en staat alles in je mandje.</p>
+      <div class="rows">${rows.map((r, i) => `
+        <div class="row-item" style="align-items:flex-start;gap:10px">
+          <input type="checkbox" data-on="${i}" ${r.on ? 'checked' : ''} ${r.pick ? '' : 'disabled'} style="width:20px;height:20px;margin-top:2px;flex:none">
+          <div class="grow" style="min-width:0">
+            <div class="title" style="white-space:normal">${esc(r.it.name)}${r.it.note ? ` <span class="muted small">${esc(r.it.note)}</span>` : ''}</div>
+            <div class="sub" style="white-space:normal">${r.pick ? `${packs(r) > 1 ? `<strong>${packs(r)}×</strong> ` : ''}${esc(r.pick.name)}${r.pick.sizeText ? ` · ${esc(r.pick.sizeText)}` : ''} · ${euro(r.pick.price)}` : 'Geen AH-product gevonden'}</div>
+            ${r.open ? `<div style="margin-top:6px"><input class="input small" data-q="${i}" value="${esc(r.q ?? r.it.name)}" placeholder="Zoek bij AH">
+              <div data-res="${i}"></div></div>` : ''}
+          </div>
+          <button class="kp-link" data-edit="${i}" style="margin-top:0">${r.open ? 'Klaar' : r.pick ? 'Wijzig' : 'Zoek'}</button>
+        </div>`).join('')}</div>
+      <div class="quiet-line" style="margin-top:12px"><span class="muted small">Totaal bij AH (zonder bonus)</span><strong class="num">${euro(total)}</strong></div>
+      <a class="btn primary block" style="margin-top:10px${chosen.length ? '' : ';pointer-events:none;opacity:.5'}" data-go target="_blank" rel="noopener" href="${esc(ahLink(chosen.map((r) => ({ id: r.pick.id, qty: packs(r) }))) || '#')}">Open AH met ${chosen.length} product${chosen.length === 1 ? '' : 'en'}</a>
+      <p class="tiny muted" style="margin-top:6px">Je moet op ah.nl ingelogd zijn. Prijzen: gewone AH-prijzen, kunnen een paar dagen oud zijn.</p>`;
+    rows.forEach((r, i) => { if (r.open) results(i); });
+  };
+  const results = (i) => {
+    const r = rows[i];
+    const box = body.querySelector(`[data-res="${i}"]`);
+    const found = ahSearch(idx, r.q ?? r.it.name, { limit: 8 });
+    box.innerHTML = found.length ? found.map((f, k) => `<button class="row-item clickable" data-pick="${i}:${k}" style="width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;font:inherit;color:inherit;min-height:0;padding:8px 0">
+      <span class="grow" style="white-space:normal">${esc(f.name)}<span class="muted small">${f.sizeText ? ` · ${esc(f.sizeText)}` : ''}</span></span><strong class="num small">${euro(f.price)}</strong></button>`).join('') : '<p class="muted small">Niets gevonden.</p>';
+    r.found = found;
+  };
+  draw();
+  body.addEventListener('change', (e) => { const c = e.target.closest('[data-on]'); if (c) { rows[+c.dataset.on].on = c.checked; draw(); } });
+  let t;
+  body.addEventListener('input', (e) => { const q = e.target.closest('[data-q]'); if (!q) return; rows[+q.dataset.q].q = q.value; clearTimeout(t); t = setTimeout(() => results(+q.dataset.q), 200); });
+  body.addEventListener('click', (e) => {
+    const ed = e.target.closest('[data-edit]');
+    if (ed) { const r = rows[+ed.dataset.edit]; r.open = !r.open; draw(); body.querySelector(`[data-q="${ed.dataset.edit}"]`)?.focus(); return; }
+    const pk = e.target.closest('[data-pick]');
+    if (pk) {
+      const [i, k] = pk.dataset.pick.split(':').map(Number);
+      const f = rows[i].found[k];
+      Object.assign(rows[i], { pick: { id: f.id, name: f.name, price: f.price, sizeText: f.sizeText }, on: true, open: false, changed: true });
+      draw(); return;
+    }
+    const go = e.target.closest('[data-go]');
+    if (go) {
+      // Onthoud de keuzes, zodat het de volgende keer meteen goed staat
+      const map = {};
+      for (const r of rows) if (r.on && r.pick) map[choiceKey(r.it.name)] = { id: r.pick.id, name: r.pick.name, price: r.pick.price, sizeText: r.pick.sizeText };
+      saveAhChoices(map);
+    }
+  });
 }

@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   ratings: [], // oordelen over aanbiedingen: { key, watchId, store, title, perUnit, discount, interesting, week, at }
   repeaters: [], // hardlopers: productId's waarvoor de lijst een herinnering geeft
   snoozed: {}, // productId → datum tot wanneer de herinnering stil is
+  ahChoices: {}, // lijstproduct → gekozen AH-product { id, name, price, sizeText }
   offerChoices: {}, // aanbiedingssleutel → zelf gekozen variant { name, sizeText, normal }
 };
 
@@ -57,6 +58,7 @@ export const state = {
 
 const listeners = new Set();
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export const notifyChanged = () => changed();
 function changed() { state.version++; cache.version = -1; for (const fn of listeners) fn(); }
 
 export function today() { return todayISO(); }
@@ -100,12 +102,12 @@ export async function loadAssortment({ force = false } = {}) {
   const { compactAssortment, ASSORTMENT_URL } = await import('../core/assortment.js');
   let rec = null;
   try { rec = await db.get('market', 'assortment'); } catch { rec = null; }
-  if (rec?.stores && !force && Date.now() - Date.parse(rec.fetchedAt) < 7 * 864e5) return rec;
+  if (rec?.stores && rec.v === 2 && !force && Date.now() - Date.parse(rec.fetchedAt) < 7 * 864e5) return rec;
   try {
     const r = await fetch(ASSORTMENT_URL, { cache: 'no-store' });
     if (!r.ok) throw new Error(`server antwoordde ${r.status}`);
     const stores = compactAssortment(await r.json());
-    rec = { id: 'assortment', stores, fetchedAt: new Date().toISOString() };
+    rec = { id: 'assortment', v: 2, stores, fetchedAt: new Date().toISOString() };
     await db.put('market', rec);
     return rec;
   } catch (e) {
