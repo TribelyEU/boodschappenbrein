@@ -111,9 +111,9 @@ test('ingrediënt → AH-product: geen ander product mét het ingrediënt', () =
     { name: 'AH Champignon schijfjes', price: 99, id: 16 }, { name: 'AH Witte champignons', price: 109, id: 17 },
   ];
   more.push({ name: 'AH Verse roomkaas met ananas', price: 239, id: 18 }, { name: 'MonChou Original verse roomkaas', price: 195, id: 19 },
-    { name: 'AH Scharrel gerookte kipfilet', price: 299, id: 20 }, { name: 'AH Scharrel kipfilet naturel', price: 299, id: 21 });
+    { name: 'AH Scharrel gerookte kipfilet', price: 299, id: 20 }, { name: 'AH Scharrel kipfilet naturel', price: 299, id: 21 }, { name: 'AH Scharrel kipfilet 2 stuks', price: 469, id: 22 });
   assert.equal(rankForIngredient(more, 'roomkaas')[0].id, 19);    // gewone roomkaas, niet met ananas
-  assert.equal(rankForIngredient(more, 'kipfilet')[0].id, 21);
+  assert.equal(rankForIngredient(more, 'kipfilet')[0].id, 22);     // verse kipfilet, geen vleeswaren (naturel/gerookte)
   assert.equal(rankForIngredient(more, 'ui')[0].id, 11);          // geen zilveruitjes in het zuur
   assert.equal(rankForIngredient(more, 'eieren')[0].id, 13);      // scharreleieren = eieren
   assert.equal(rankForIngredient(more, 'spekreepjes')[0].id, 15);
@@ -144,4 +144,22 @@ test('beoordelingen', () => {
   assert.ok(ratingScore({ rating: 4.8, ratingCount: 200 }) > ratingScore({ rating: 5, ratingCount: 2 }));
   const a = { ...r, name: 'A', rating: 5, ratingCount: 2 }, b = { ...r, name: 'B', rating: 4.8, ratingCount: 200 }, c = { ...recipeFromLd(LD, 'u'), name: 'C' };
   assert.deepEqual(searchRecipes([c, a, b], '', { sort: 'rating' }).map((x) => x.name), ['B', 'A', 'C']);
+});
+
+import { needOf, cheapestCover } from '../js/core/ah.js';
+test('stuks omrekenen en de voordeligste verpakking', () => {
+  assert.deepEqual(needOf({ qty: 4, amount: '', name: 'zalmfilets' }), { amount: 500, unit: 'g', pieces: 4 });
+  assert.equal(packsNeeded({ qty: 4, amount: '', name: 'zalmfilets' }, { amount: 250, unit: 'g' }), 2);
+  assert.equal(packsNeeded({ qty: 2, amount: '', name: 'courgettes' }, { amount: 1, unit: 'st' }), 2);
+  assert.equal(needOf({ qty: 1, amount: '2 el', name: 'ketjap' }), null);
+  const kip = [
+    { name: 'AH Scharrel kipfilet', price: 359, sizeAmount: 125, sizeUnit: 'g', _score: 3 },
+    { name: 'AH Scharrel kipfilet', price: 999, sizeAmount: 800, sizeUnit: 'g', _score: 3 },
+    { name: 'AH Scharrel kipfilet 3 stuks', price: 799, sizeAmount: 600, sizeUnit: 'g', _score: 3 },
+    { name: 'AH Kipfilet pepersaus', price: 579, sizeAmount: 500, sizeUnit: 'g', _score: 1 },
+  ];
+  assert.equal(cheapestCover(kip, { qty: 1, amount: '700 gr', name: 'kipfilet' }).price, 999);
+  assert.equal(cheapestCover(kip, { qty: 1, amount: '100 gr', name: 'kipfilet' }).price, 359);
+  assert.equal(parseIngredient('eventueel 1 bosui').optional, true);
+  assert.equal(parseIngredient('eventueel 1 bosui').name, 'bosui');
 });

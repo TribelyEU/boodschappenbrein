@@ -178,11 +178,26 @@ function weekToList(monday) {
 }
 
 // ---------- recepten zoeken (Lekker en Simpel) ----------
-const rs = { q: '', main: true, quick: false };
+const rs = { q: '', main: true, quick: false, sort: 'relevant' };
+const SORTS = [['relevant', 'Nieuw'], ['cost', 'Voordeligst'], ['rating', 'Best beoordeeld']];
+const recipeCost = new Map(); // url|versie → kosten voor het gezin
+
+/** Boodschappen voor dit recept, omgerekend naar het gezin (hele verpakkingen, zonder voorraadkast). */
+function costForFamily(r, price) {
+  const key = `${r.url}|${state.version}`;
+  if (!recipeCost.has(key)) {
+    const f = FAMILY / (r.servings || FAMILY);
+    recipeCost.set(key, dishCost(r.ingredients.map((t) => toIngredient(parseIngredient(t), f)), price));
+  }
+  return recipeCost.get(key);
+}
+const stars = (r) => (r.rating ? `★ ${String(r.rating).replace('.', ',')} (${r.ratingCount})` : '');
+
 async function recipeSheet() {
   const sheet = openSheet(`
     <div class="between"><h2>Recepten</h2><span class="tiny muted">van Lekker en Simpel</span></div>
     <input class="input" type="search" placeholder="Zoek op gerecht of ingrediënt" value="${esc(rs.q)}" data-q style="margin-top:8px">
+    <div class="seg" style="margin:10px 0 0;display:flex">${SORTS.map(([k, l]) => `<button data-sort="${k}" class="${rs.sort === k ? 'on' : ''}" style="flex:1;padding:7px 6px">${l}</button>`).join('')}</div>
     <div class="gap8" style="margin:8px 0 4px">
       <button class="chip ${rs.main ? 'good' : ''}" data-f="main">Hoofdgerecht</button>
       <button class="chip ${rs.quick ? 'good' : ''}" data-f="quick">Max. 30 min</button>
@@ -192,22 +207,55 @@ async function recipeSheet() {
   let list;
   try { list = (await loadRecipes()).recipes; } catch (e) { box.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; return; }
   if (!list.length) { box.innerHTML = '<p class="muted small">Er zijn nog geen recepten opgehaald. Probeer het morgen opnieuw.</p>'; return; }
-  const draw = () => {
-    const found = searchRecipes(list, rs.q, { maxTime: rs.quick ? 30 : null, category: rs.main ? 'hoofdgerecht' : null, limit: 40 });
-    box.innerHTML = found.length ? `<div class="rows">${found.map((r) => `<button class="row-item clickable" data-url="${esc(r.url)}" style="width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;font:inherit;color:inherit">
+  let run = 0;
+  const row = (r, cost) => `<button class="row-item clickable" data-url="${esc(r.url)}" style="width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;font:inherit;color:inherit">
       ${r.image ? `<img class="kp-thumb" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" style="width:64px;height:48px;object-fit:cover">` : '<span class="kp-thumb" style="width:64px;height:48px"></span>'}
       <span class="grow" style="min-width:0"><span class="title" style="white-space:normal;display:block">${esc(r.name)}</span>
-        <span class="sub">${esc([r.time ? `${r.time} min` : '', r.servings ? `${r.servings} pers.` : '', `${r.ingredients.length} ingrediënten`].filter(Boolean).join(' · '))}</span></span>
-    </button>`).join('')}</div>` : '<p class="muted small" style="padding:12px 0">Niets gevonden.</p>';
+        <span class="sub">${esc([r.time ? `${r.time} min` : '', stars(r), `${r.ingredients.length} ingrediënten`].filter(Boolean).join(' · '))}</span></span>
+      ${cost ? (cost.total != null ? `<span style="text-align:right;flex:none"><strong class="num">${euro(cost.total)}</strong><span class="tiny muted" style="display:block">voor ${FAMILY}</span></span>` : '<span class="tiny muted" style="flex:none">onvolledig</span>') : ''}
+    </button>`;
+  const draw = async () => {
+    const id = ++run;
+    const opts = { maxTime: rs.quick ? 30 : null, category: rs.main ? 'hoofdgerecht' : null };
+    if (rs.sort !== 'cost') {
+      const found = searchRecipes(list, rs.q, { ...opts, sort: rs.sort, limit: 40 });
+      const note = rs.sort === 'rating' && !found.some((r) => r.rating) ? '<p class="tiny muted" style="margin:6px 0">De beoordelingen worden nog opgehaald.</p>' : '';
+      box.innerHTML = found.length ? `${note}<div class="rows">${found.map((r) => row(r, null)).join('')}</div>` : '<p class="muted small" style="padding:12px 0">Niets gevonden.</p>';
+      return;
+    }
+    // Voordeligst: van alle treffers de boodschappen uitrekenen (in stukjes, zodat het scherm blijft reageren)
+    const found = searchRecipes(list, rs.q, { ...opts, limit: 1000 });
+    if (!found.length) { box.innerHTML = '<p class="muted small" style="padding:12px 0">Niets gevonden.</p>'; return; }
+    if (!assortmentReady()) {
+      box.innerHTML = '<div class="muted small" style="padding:14px 0"><span class="spinner"></span> AH-prijzen laden…</div>';
+      try { await assortmentIndex(); } catch (e) { box.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; return; }
+      if (id !== run) return;
+    }
+    const memo = new Map();
+    const price = (n, ing) => { const k = `${n}|${ing?.amount}|${ing?.qty}`; if (!memo.has(k)) memo.set(k, priceFor(n, ing)); return memo.get(k); };
+    for (let i = 0; i < found.length; i += 12) {
+      found.slice(i, i + 12).forEach((r) => costForFamily(r, price));
+      if (i + 12 < found.length) {
+        box.innerHTML = `<div class="muted small" style="padding:14px 0"><span class="spinner"></span> Prijzen berekenen… ${i + 12} van ${found.length}</div>`;
+        await new Promise((res) => setTimeout(res, 0));
+        if (id !== run) return;
+      }
+    }
+    const withCost = found.map((r) => ({ r, c: costForFamily(r, price) }));
+    withCost.sort((a, b) => (a.c.total ?? Infinity) - (b.c.total ?? Infinity));
+    box.innerHTML = `<p class="tiny muted" style="margin:6px 0">Boodschappen voor ${FAMILY} personen bij AH: hele verpakkingen, gewone prijzen, zonder wat meestal in huis is.</p>
+      <div class="rows">${withCost.slice(0, 40).map(({ r, c }) => row(r, c)).join('')}</div>`;
   };
   draw();
   let t;
-  sheet.querySelector('[data-q]').addEventListener('input', (e) => { rs.q = e.target.value; clearTimeout(t); t = setTimeout(draw, 150); });
+  sheet.querySelector('[data-q]').addEventListener('input', (e) => { rs.q = e.target.value; clearTimeout(t); t = setTimeout(draw, 250); });
   sheet.addEventListener('click', (e) => {
+    const so = e.target.closest('[data-sort]');
+    if (so) { rs.sort = so.dataset.sort; sheet.querySelectorAll('[data-sort]').forEach((b) => b.classList.toggle('on', b === so)); draw(); return; }
     const f = e.target.closest('[data-f]');
     if (f) { rs[f.dataset.f] = !rs[f.dataset.f]; f.classList.toggle('good', rs[f.dataset.f]); draw(); return; }
-    const row = e.target.closest('[data-url]');
-    if (row) recipePreview(list.find((r) => r.url === row.dataset.url));
+    const hit = e.target.closest('[data-url]');
+    if (hit) recipePreview(list.find((r) => r.url === hit.dataset.url));
   });
 }
 
@@ -220,7 +268,7 @@ function recipePreview(r) {
   const sheet = openSheet(`
     ${r.image ? `<img src="${esc(r.image)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;margin-bottom:10px">` : ''}
     <h2 style="margin:0">${esc(r.name)}</h2>
-    <p class="muted small" style="margin:2px 0 10px">${esc([r.time ? `${r.time} min` : '', r.cuisine?.[0] || ''].filter(Boolean).join(' · '))}</p>
+    <p class="muted small" style="margin:2px 0 10px">${esc([r.time ? `${r.time} min` : '', stars(r), r.cuisine?.[0] || ''].filter(Boolean).join(' · '))}</p>
     ${r.servings ? `<div class="seg" style="margin-bottom:8px">${[...new Set([r.servings, FAMILY, r.servings * 2])].sort((a, b) => a - b).slice(0, 3).map((n) => `<button data-p="${n}">${n} pers.</button>`).join('')}</div>` : ''}
     <div data-ings></div>
     <div data-cost style="margin-top:10px"></div>

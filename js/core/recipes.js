@@ -26,8 +26,9 @@ const fmt = (n) => {
 /** "700 gr kruimige aardappels" → { amount: 700, amountTo: null, unit: 'gr', name: 'kruimige aardappels', optional, pantry } */
 export function parseIngredient(raw) {
   let s = String(raw).replace(/\s+/g, ' ').trim();
-  const optional = /\(?\s*optioneel\s*\)?/i.test(s);
-  s = s.replace(/\(?\s*optioneel\s*\)?/ig, '').replace(/\s+/g, ' ').trim();
+  const OPT = /\(?\s*\b(optioneel|eventueel|evt\.?)\s*\)?/ig;
+  const optional = OPT.test(s);
+  s = s.replace(OPT, ' ').replace(/\s+/g, ' ').trim();
   let amount = null, amountTo = null, unit = '';
   const m = s.match(/^(\d+(?:[.,]\d+)?(?:\s*½)?|\d+\/\d+|½|¼)(?:\s*(?:-|tot|à)\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
   if (m && m[3] !== undefined) {

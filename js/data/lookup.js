@@ -4,7 +4,7 @@ import { findProducts } from '../core/query.js';
 import { productTokens, parseSize } from '../core/products.js';
 import { priceStats } from '../core/stockpile.js';
 import { indexAssortment } from '../core/assortment.js';
-import { choiceKey, queryVariants, rankForIngredient } from '../core/ah.js';
+import { choiceKey, queryVariants, rankForIngredient, cheapestCover } from '../core/ah.js';
 
 /** Het eigen product (uit de bonnen) dat het vaakst gekocht is en bij deze naam past. */
 export function matchIngredient(name) {
@@ -26,11 +26,11 @@ export async function assortmentIndex() {
 export const assortmentReady = () => assortment;
 
 /** AH-producten die bij deze naam passen (beste eerst). Eigen productnaam eerst, dan steeds algemener. */
-export function ahSearch(idx, name, { productName = null, limit = 8 } = {}) {
+export function ahSearch(idx, name, { productName = null, limit = 8, withScore = false } = {}) {
   const items = idx.ahItems ||= idx.items.filter((it) => it.store === 'ah' && it.id);
   const tries = [...(productName ? [productName.replace(/^ah\s+/i, '')] : []), ...queryVariants(name)];
   for (const q of tries) {
-    const res = rankForIngredient(items, q, { limit });
+    const res = rankForIngredient(items, q, { limit, withScore });
     if (res.length) return res;
   }
   return [];
@@ -52,7 +52,7 @@ export function ahSuggest(idx, name, productId = null) {
 }
 
 /** Prijs van één verpakking voor de kosten van een gerecht: eigen keuze, eigen laatste prijs, anders AH. */
-export function priceFor(name) {
+export function priceFor(name, ing = null) {
   const c = ahChoice(name);
   if (c?.price) return { price: c.price, size: parseSize(c.sizeText) || parseSize(c.name), name: c.name, source: 'ah' };
   const p = matchIngredient(name);
@@ -61,6 +61,6 @@ export function priceFor(name) {
     if (st.observations && st.packPrice && !st.weighed) return { price: Math.round(st.packPrice), size: st.packSize, name: p.name, source: 'eigen' };
   }
   if (!assortment) return null;
-  const top = ahSearch(assortment, name)[0];
+  const top = cheapestCover(ahSearch(assortment, name, { withScore: true }), ing);
   return top ? { price: top.price, size: top.sizeAmount ? { amount: top.sizeAmount, unit: top.sizeUnit } : null, name: top.name, source: 'ah' } : null;
 }

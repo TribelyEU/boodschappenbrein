@@ -31,15 +31,30 @@ const SYNONYMS = [[/parmezaan/i, 'parmigiano reggiano'], [/^(gele )?uien?$/i, 'g
 const BASE = { g: 1, gr: 1, gram: 1, kg: 1000, kilo: 1000, ml: 1, cl: 10, dl: 100, l: 1000, liter: 1000 };
 const BASE_UNIT = { g: 'g', gr: 'g', gram: 'g', kg: 'g', kilo: 'g', ml: 'ml', cl: 'ml', dl: 'ml', l: 'ml', liter: 'ml' };
 
-/** Hoeveel verpakkingen van `size` ({amount, unit: g|ml|st}) zijn nodig voor dit ingrediënt ({qty, amount: '1400 gr'})? */
-export function packsNeeded(ing, size) {
+// Gewicht van één stuk, voor "2 zalmfilets" als AH ze per gewicht verkoopt (250 g). Grove, gangbare gewichten.
+const PIECE_G = [
+  [/zalmfilet|zalmmoot|kabeljauwfilet|visfilet|pangasius/, 125], [/kipfilet|kippenborst/, 150], [/kipdij|kippendij/, 100],
+  [/biefstuk|varkenshaas|schnitzel|speklap|karbonade|hamburger/, 150], [/rookworst/, 275], [/braadworst|saucijs/, 100],
+  [/zoete aardappel/, 300], [/aardappel/, 150], [/^(rode |gele )?ui$|^uien$/, 100], [/tomaat|tomaten/, 100], [/paprika/, 160],
+  [/courgette/, 300], [/aubergine/, 300], [/komkommer/, 350], [/winterwortel/, 400], [/wortel/, 80], [/prei/, 200],
+  [/broccoli/, 400], [/bloemkool/, 600], [/spitskool/, 700], [/appel|peer/, 150], [/pompoen/, 1000], [/venkel/, 250],
+];
+/** Hoeveel gram/ml is er nodig? Uit "700 gr" of uit een aantal stuks × gangbaar gewicht. null als dat niet te zeggen is. */
+export function needOf(ing) {
   const p = ing.amount ? parseIngredient(`${ing.amount} x`) : null;
   const unit = p?.unit ? p.unit.toLowerCase() : '';
-  if (p?.amount != null && BASE[unit]) {
-    const need = (p.amountTo ?? p.amount) * BASE[unit];
-    if (size?.amount && size.unit === BASE_UNIT[unit]) return Math.max(1, Math.ceil(need / size.amount - 0.05));
-    return 1;
-  }
+  if (p?.amount != null && BASE[unit]) return { amount: (p.amountTo ?? p.amount) * BASE[unit], unit: BASE_UNIT[unit] };
+  if (ing.amount) return null;
+  const name = normalizeText(ing.name);
+  const hit = PIECE_G.find(([re]) => re.test(name));
+  return hit ? { amount: (ing.qty || 1) * hit[1], unit: 'g', pieces: ing.qty || 1 } : null;
+}
+
+/** Hoeveel verpakkingen van `size` ({amount, unit: g|ml|st}) zijn nodig voor dit ingrediënt ({qty, amount: '1400 gr'})? */
+export function packsNeeded(ing, size) {
+  const need = needOf(ing);
+  if (need && !need.pieces) return size?.amount && size.unit === need.unit ? Math.max(1, Math.ceil(need.amount / size.amount - 0.05)) : 1;
+  if (need?.pieces && size?.amount && size.unit === 'g') return Math.max(1, Math.ceil(need.amount / size.amount - 0.1));
   const n = ing.amount ? null : ing.qty || 1;
   if (n != null && size?.unit === 'st' && size.amount) return Math.max(1, Math.ceil(n / size.amount));
   if (n != null && (!size || size.unit === 'st')) return n; // per stuk verkocht: 2 paprika's = 2
@@ -67,7 +82,7 @@ export function dishCost(ingredients, priceFor) {
   const missing = [];
   for (const ing of ingredients) {
     if (ing.pantry || ing.optional) continue;
-    const pr = priceFor(ing.name);
+    const pr = priceFor(ing.name, ing);
     if (!pr?.price) { missing.push(ing.name); continue; }
     const packs = packsNeeded(ing, pr.size);
     total += pr.price * packs;
@@ -79,9 +94,9 @@ export function dishCost(ingredients, priceFor) {
 // ---------- ingrediënt → AH-product ----------
 const STOPWORDS = new Set(['ah', 'de', 'het', 'een', 'en', 'of', 'van', 'voor', 'in', 'op', 'naturel', 'basic']);
 // Woorden die het een ánder product maken (of een duurdere variant): flink lager rangschikken
-const PENALTY = new Set(['biologisch', 'bio', 'excellent', 'glutenvrij', 'lactosevrij', 'terra', 'plantaardig', 'alternatief', 'kids', 'mini', 'light', 'rauwkost', 'soep', 'kopsoep', 'saus', 'chips', 'kronkels', 'ribbelchips', 'krokantjes', 'rijstzoutjes', 'zoutjes', 'reep', 'chutney', 'mix', 'lasagne', 'pie', 'salade', 'saladeschotel', 'spread', 'smeerkaas', 'worst', 'grillworst', 'hapje', 'groentehapje', 'tapenade', 'advocaat', 'gemalen', 'poeder', 'kruiden', 'pesto', 'dip', 'snack', 'snacks', 'koekjes', 'drank', 'sap', 'yoghurtdrank', 'babyvoeding', 'olvarit', 'diepvries', 'gedroogd', 'gedroogde', 'ingelegd', 'ingelegde', 'pot', 'gegrild', 'gebraden', 'speculoos', 'speculoospasta', 'miso', 'roasted', 'croutons', 'chocoladepasta', 'bolletjes', 'amsterdamse', 'zilveruitjes', 'gesneden', 'schijfjes', 'gebakken', 'rondeel', 'buitenbeentjes', 'grootverpakking', 'verspakket', 'roerbakgroente', 'wok', 'luxe', 'gerijpte', 'gemarineerde', 'gemarineerd', 'magere', 'mager', 'kalkoen', 'advocaat', 'chutney', 'pers']);
+const PENALTY = new Set(['biologisch', 'bio', 'excellent', 'glutenvrij', 'lactosevrij', 'terra', 'plantaardig', 'alternatief', 'kids', 'mini', 'light', 'rauwkost', 'soep', 'kopsoep', 'saus', 'chips', 'kronkels', 'ribbelchips', 'krokantjes', 'rijstzoutjes', 'zoutjes', 'reep', 'chutney', 'mix', 'lasagne', 'pie', 'salade', 'saladeschotel', 'spread', 'smeerkaas', 'worst', 'grillworst', 'hapje', 'groentehapje', 'tapenade', 'advocaat', 'gemalen', 'poeder', 'kruiden', 'pesto', 'dip', 'snack', 'snacks', 'koekjes', 'drank', 'sap', 'yoghurtdrank', 'babyvoeding', 'olvarit', 'diepvries', 'gedroogd', 'gedroogde', 'ingelegd', 'ingelegde', 'pot', 'gegrild', 'gebraden', 'speculoos', 'speculoospasta', 'miso', 'roasted', 'croutons', 'chocoladepasta', 'bolletjes', 'amsterdamse', 'zilveruitjes', 'gesneden', 'schijfjes', 'gebakken', 'rondeel', 'buitenbeentjes', 'grootverpakking', 'verspakket', 'roerbakgroente', 'wok', 'luxe', 'gerijpte', 'gemarineerde', 'gemarineerd', 'magere', 'mager', 'kalkoen', 'advocaat', 'chutney', 'pers', 'ovenfriet', 'friet', 'blokjes', 'airfryer', 'oven', 'plakjes', 'flinterdun', 'kleinverpakking', 'naturel', 'gerookte', 'pittig', 'jalapeno', 'bieslook', 'paprika', 'puree', 'pureersoep', 'groentehapje', 'knijpfruit', 'spread']);
 // Gewone omschrijvingen van het basisproduct: tellen niet als "extra woord" (AH Gele uien = uien, AH Witte champignons = champignons)
-const NEUTRAL = ['gele', 'witte', 'verse', 'vers', 'scharrel', 'hollandse', 'naturel', 'original', 'origineel', 'kruimige', 'kruimig', 'vastkokende', 'vastkokend', 'grote', 'middelgrote', 'jonge', 'halfvolle', 'volle'];
+const NEUTRAL = ['gele', 'witte', 'verse', 'vers', 'scharrel', 'hollandse', 'original', 'origineel', 'kruimige', 'kruimig', 'vastkokende', 'vastkokend', 'grote', 'middelgrote', 'jonge', 'halfvolle', 'volle'];
 const NEUTRAL_SET = new Set(NEUTRAL);
 const FILLER = new Set(['stuks', 'stuk', 'per', 'pak', 'zak', 'bak', 'kg', 'g', 'gram', 'ml', 'l', 'liter', 'cl', 'los', 'ca', 'circa']);
 /** Stam van een Nederlands woord: meervoud weg (uien → ui, aardappelen/aardappels → aardappel, eieren → ei). */
@@ -109,19 +124,34 @@ function wordHit(tok, w) {
   return null;
 }
 
+// Woorden per product één keer uitrekenen (het AH-assortiment heeft ruim 16.000 producten)
+const PREP = new WeakMap();
+function prepared(it) {
+  let p = PREP.get(it);
+  if (!p) {
+    const all = wordsOf(it.name);
+    const cut = all.findIndex((w, i) => i > 0 && (w === 'met' || w === 'in' || w === 'op'));
+    const head = (cut > 0 ? all.slice(0, cut) : all).filter((w) => !STOPWORDS.has(w) && !FILLER.has(w));
+    p = { all, cut, head, joined: head.join(' ') };
+    PREP.set(it, p);
+  }
+  return p;
+}
+
 /**
  * Rangschik AH-producten voor een ingrediënt. items: [{name, price, sizeText, id, ...}].
  * Regels: alle woorden moeten voorkomen vóór "met"/"en" (anders is het iets anders mét dit ingrediënt);
  * minder extra woorden is beter; huismerk (AH) en lagere prijs bij gelijke stand.
  */
-export function rankForIngredient(items, query, { limit = 8 } = {}) {
+export function rankForIngredient(items, query, { limit = 8, withScore = false } = {}) {
   const q = wordsOf(query).filter((w) => !STOPWORDS.has(w) && !FILLER.has(w));
   if (!q.length) return [];
   const out = [];
+  const needles = q.map((w) => stem(w).replace(/e$/, ''));
   for (const it of items) {
-    const all = wordsOf(it.name);
-    const cut = all.findIndex((w, i) => i > 0 && (w === 'met' || w === 'in' || w === 'op'));
-    const head = (cut > 0 ? all.slice(0, cut) : all).filter((w) => !STOPWORDS.has(w) && !FILLER.has(w));
+    const { all, cut, head, joined } = prepared(it);
+    // Snelle voorselectie: elk zoekwoord (zijn stam) moet ergens in de naam staan
+    if (!needles.every((n) => joined.includes(n))) continue;
     let exact = 0, compound = 0, ok = true;
     for (const w of q) {
       const hits = head.map((t) => wordHit(t, w));
@@ -135,5 +165,18 @@ export function rankForIngredient(items, query, { limit = 8 } = {}) {
     out.push({ it, score, house: /^ah\b/i.test(it.name) });
   }
   out.sort((a, b) => b.score - a.score || (b.house - a.house) || a.it.price - b.it.price);
-  return out.slice(0, limit).map((x) => x.it);
+  return out.slice(0, limit).map((x) => (withScore ? { ...x.it, _score: x.score } : x.it));
+}
+
+/**
+ * Kies uit gelijkwaardige treffers (bijna dezelfde score als de beste) de verpakking waarmee je het goedkoopst genoeg hebt:
+ * 700 g kipfilet → één bak van 800 g i.p.v. zes bakjes van 125 g.
+ */
+export function cheapestCover(cands, ing) {
+  if (!cands.length) return null;
+  const best = cands[0]._score ?? 0;
+  const pool = cands.filter((c) => (c._score ?? 0) >= best - 0.5);
+  if (!ing || pool.length < 2) return pool[0];
+  const cost = (c) => c.price * packsNeeded(ing, c.sizeAmount ? { amount: c.sizeAmount, unit: c.sizeUnit } : null);
+  return [...pool].sort((a, b) => cost(a) - cost(b) || (b._score ?? 0) - (a._score ?? 0))[0];
 }
