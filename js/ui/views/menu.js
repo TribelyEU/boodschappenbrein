@@ -163,7 +163,7 @@ function weekToList(monday) {
     <h2>Op de boodschappenlijst</h2>
     <p class="muted small" style="margin:2px 0 8px">Vink uit wat je al in huis hebt.</p>
     <div class="rows">${items.map((it, i) => `<label class="row-item" style="gap:10px;min-height:44px">
-      <input type="checkbox" data-i="${i}" ${it.pantry || it.optional ? '' : 'checked'} style="width:20px;height:20px">
+      <input type="checkbox" data-i="${i}" ${it.optional ? '' : 'checked'} style="width:20px;height:20px">
       <span class="grow"><span class="title" style="white-space:normal">${esc(it.name)}</span>
         <span class="sub">${esc([amountOf(it), it.pantry ? 'meestal in huis' : it.optional ? 'optioneel' : ''].filter(Boolean).join(' · '))}</span></span>
     </label>`).join('')}</div>

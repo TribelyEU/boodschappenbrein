@@ -191,3 +191,10 @@ test('voorraadkast, breuken en tomaat/tomaten', () => {
   assert.equal(rankForIngredient(items, 'tomaat')[0].id, 2);
   assert.equal(rankForIngredient(items, 'peren').length, 0);
 });
+
+test('centimeter wordt een eenheid, geen onderdeel van de naam', () => {
+  const r = parseIngredient('2 cm verse gember');
+  assert.equal(r.unit, 'cm');
+  assert.equal(r.name, 'verse gember');
+  assert.equal(r.amount, 2);
+});
