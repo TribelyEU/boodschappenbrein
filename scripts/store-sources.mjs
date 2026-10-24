@@ -38,12 +38,13 @@ function hash(str) {
   return h.toString(36);
 }
 
-function finish(store, list) {
+export function finish(store, list) {
   const seen = new Set();
   const out = [];
   for (const o of list) {
     if (!o || !o.title) continue;
     const title = clean(o.title);
+    if (/\?\s*$/.test(title)) continue; // "Welke biermerken zijn bij jouw Jumbo in de aanbieding?" is reclame, geen product
     const key = `${title}|${o.size || ''}|${o.price ?? ''}|${o.mechanism || ''}`;
     if (seen.has(key)) continue;
     seen.add(key);

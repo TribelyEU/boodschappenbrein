@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parseDirk, parseJumbo, parseHoogvliet, parseAction, parseLidl, devalue, robotsAllows, fetchStore } from '../scripts/store-sources.mjs';
+import { finish, parseDirk, parseJumbo, parseHoogvliet, parseAction, parseLidl, devalue, robotsAllows, fetchStore } from '../scripts/store-sources.mjs';
 import { parseMechanism } from '../js/core/offers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -188,4 +188,12 @@ realTest('lidl', 'echte Lidl-pagina (23 okt 2026)', (html) => {
   const sp = o.find((x) => x.title === 'Gewassen spinazie');
   assert.deepEqual([sp.price, sp.was], [99, 179]);
   assert.ok(o.some((x) => /Lidl Plus/.test(x.mechanism)));
+});
+
+test('vraagtitels (reclame) worden overgeslagen', () => {
+  const out = finish('jumbo', [
+    { ref: '1', title: 'Welke biermerken zijn bij jouw Jumbo in de aanbieding?', price: null, mechanism: 'Actie' },
+    { ref: '2', title: 'Chips zout', price: 1.99, mechanism: null },
+  ]);
+  assert.deepEqual(out.map((o) => o.title), ['Chips zout']);
 });
