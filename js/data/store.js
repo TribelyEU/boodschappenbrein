@@ -8,7 +8,7 @@ import { rhythmOverview } from '../core/promo-rhythm.js';
 import { freezerContents, defaultsFor } from '../core/stockpile.js';
 import { offersStatus } from '../core/offers.js';
 import { DEFAULT_WATCHLIST, watchOffers } from '../core/watch.js';
-import { categoryModel } from '../core/categories.js';
+import { categoryModel, guessCategory } from '../core/categories.js';
 import { proposalToRecords } from '../core/commit.js';
 import { aliasKey } from '../core/products.js';
 import { buildBackup, validateBackup, BACKUP_TABLES } from '../core/backup.js';
@@ -181,11 +181,17 @@ export async function reload() {
   );
   state.stockpile = stockpile.sort((a, b) => a.name.localeCompare(b.name));
   state.freezer = freezer;
-  state.receipts = receipts.sort((a, b) => b.date.localeCompare(a.date));
+  state.receipts = receipts.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   state.lines = lines;
   state.products = new Map(products.map((p) => [p.id, p]));
+  // Betere trefwoorden in een nieuwe versie: automatisch als "Overig" ingedeelde producten opnieuw proberen (zelf ingedeeld blijft staan)
+  for (const p of products) {
+    if (p.category !== 'overig' || p.categorySource === 'manual') continue;
+    const g = guessCategory(p.name);
+    if (g.id !== 'overig') { p.category = g.id; await db.put('products', p); }
+  }
   state.aliases = new Map(aliases.map((a) => [a.key, a.productId]));
-  state.imports = imports.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  state.imports = imports.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   state.adjustments = adjustments;
   state.list = list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   state.meals = meals;
@@ -424,24 +430,6 @@ export async function saveStockpile(entry) {
   changed();
   return e;
 }
-export async function deleteStockpile(id) {
-  await db.write({ stockpile: { delete: [id] }, freezer: { delete: state.freezer.filter((f) => f.entryId === id).map((f) => f.id) } });
-  state.stockpile = state.stockpile.filter((e) => e.id !== id);
-  state.freezer = state.freezer.filter((f) => f.entryId !== id);
-  changed();
-}
-export async function freezerAction(entryId, type, qty = null) {
-  const rec = { id: uid(), entryId, type, qty, date: today(), createdAt: new Date().toISOString() };
-  await db.put('freezer', rec);
-  state.freezer.push(rec);
-  changed();
-  return rec;
-}
-export async function undoFreezerAction(id) {
-  await db.del('freezer', id);
-  state.freezer = state.freezer.filter((f) => f.id !== id);
-  changed();
-}
 
 // ---------- weekmenu ----------
 export async function saveMeal(meal) {
@@ -471,9 +459,6 @@ export async function setSetting(key, value) {
   changed();
 }
 
-// ---------- prijsdata ----------
-export async function savePriceData(record) { await db.put('market', record); changed(); }
-export async function loadPriceData(id = 'checkjebon') { return db.get('market', id); }
 
 // ---------- back-up ----------
 export async function exportBackup() {

@@ -11,16 +11,6 @@ import { parseSize, productTokens, unitPrice } from './products.js';
 import { normalizeText } from './text.js';
 import { guessCategory } from './categories.js';
 
-export const PRICE_SOURCES = {
-  checkjebon: {
-    id: 'checkjebon',
-    name: 'Checkjebon.nl open data',
-    dataUrl: 'https://raw.githubusercontent.com/supermarkt/checkjebon/main/data/supermarkets.json',
-    commitsUrl: 'https://api.github.com/repos/supermarkt/checkjebon/commits?path=data/supermarkets.json&per_page=1',
-    infoUrl: 'https://github.com/supermarkt/checkjebon',
-    notes: 'Gratis open data, dagelijks bijgewerkt door een vrijwilligersproject. Geen aanbiedingen, geen Aldi. Lidl via boodschaapje.nl.',
-  },
-};
 
 const STORE_ALIASES = { ah: 'ah', jumbo: 'jumbo', lidl: 'lidl', aldi: 'aldi', dirk: 'dirk', plus: 'plus', hoogvliet: 'hoogvliet', vomar: 'vomar', dekamarkt: 'dekamarkt', spar: 'spar', poiesz: 'poiesz', ekoplaza: 'ekoplaza' };
 

@@ -7,7 +7,7 @@
 // Belangrijk: we vergelijken met wat JULLIE normaal betalen (uit de bonnen), niet met de "van"-prijs
 // van de folder. Zo vallen schijnkortingen vanzelf af.
 
-import { productTokens, detectBrand, parseSize } from './products.js';
+import { productTokens, detectBrand } from './products.js';
 import { normalizeText, stem } from './text.js';
 import { effectiveDeal, adviseDeal, priceStats, entryUnit } from './stockpile.js';
 import { neededWithin } from './stock-model.js';

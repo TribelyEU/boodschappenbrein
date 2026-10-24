@@ -14,7 +14,6 @@ import { priceHistory } from './analytics.js';
 import { addDays, daysBetween } from './dates.js';
 import { categoryModel } from './categories.js';
 
-export const LOCATIONS = { kast: 'Kast', vriezer: 'Vriezer' };
 
 /** Standaardinstellingen per categorie. Houdbaarheid in de vriezer is een richtlijn; per product aan te passen. */
 export function defaultsFor(product) {
@@ -73,10 +72,6 @@ function amountOf(line, unit) {
   if (line.weighed) return (line.qty || 0) * 1000; // kg → g
   return (line.qty || 1) * (line.sizeAmount || 0);
 }
-/** Omrekenen naar weergave-eenheid (kilo/liter/stuk/pak). */
-export function toDisplay(amount, unit) {
-  return unit === 'g' || unit === 'ml' ? amount / 1000 : amount;
-}
 
 /** Gecombineerde verbruiksvoorspelling van alle producten in het item (in de eenheid van het item). */
 export function entryPrediction(entry, { lines, adjustments = [], products, today, vacations = [] }) {
@@ -121,13 +116,6 @@ export function priceStats(facts, productId) {
   };
 }
 
-export const DEAL_TYPES = {
-  prijs: 'Actieprijs per stuk',
-  pct: '% korting',
-  gratis: 'x + y gratis (bv. 1+1, 2+1)',
-  tweedehalf: '2e halve prijs',
-  xvoor: 'x voor € …',
-};
 
 /**
  * Effectieve prijs per verpakking van een actie, en het minimale aantal (bundel) om de actie te krijgen.

@@ -1,7 +1,7 @@
-import { state, setMode, setSetting, exportBackup, restoreBackup, wipeAll, db } from '../../data/store.js';
-import { html, icon, toast, confirmSheet, download } from '../dom.js';
+import { state, setMode, setSetting, restoreBackup, wipeAll, db } from '../../data/store.js';
+import { html, icon, toast, confirmSheet } from '../dom.js';
 import { STORES, storeName } from '../../core/stores.js';
-import { formatDate, todayISO, localDateOf } from '../../core/dates.js';
+import { formatDate, localDateOf } from '../../core/dates.js';
 import { validateBackup } from '../../core/backup.js';
 import { currentVersion, checkForUpdate, reloadApp } from '../../app/update.js';
 import { backupNow, daysSinceBackup } from '../../app/backup.js';
@@ -11,7 +11,6 @@ let usage = null;
 export default {
   render() {
     if (!usage) db.estimateUsage().then((u) => { usage = u || { usage: 0 }; window.dispatchEvent(new HashChangeEvent('hashchange')); });
-    const vac = state.settings.vacations || [];
     return html`
       <div class="page-head"><div><h1>Instellingen</h1></div></div>
       <div class="stack">

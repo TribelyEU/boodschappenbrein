@@ -61,21 +61,12 @@ const fmtShort = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: '
 /** Formatteert centen als "€ 12,34". */
 export function euro(cents, { short = false } = {}) {
   if (cents == null || !Number.isFinite(cents)) return '–';
-  return (short ? fmtShort : fmt).format(cents / 100);
+  // "−€ 4,97" in plaats van "€ -4,97"
+  const f = (short ? fmtShort : fmt).format(Math.abs(cents) / 100);
+  return cents < 0 ? `−${f}` : f;
 }
 
-/** Som van centen, null-waarden genegeerd. */
-export function sumCents(values) {
-  let t = 0;
-  for (const v of values) if (Number.isFinite(v)) t += v;
-  return t;
-}
 
-/** Percentage verandering van a naar b, of null als a 0 is. */
-export function pctChange(from, to) {
-  if (!from) return null;
-  return (to - from) / Math.abs(from);
-}
 
 export function pct(value, digits = 0) {
   if (value == null || !Number.isFinite(value)) return '–';

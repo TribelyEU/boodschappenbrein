@@ -6,7 +6,7 @@ import { html, icon, toast, openSheet, closeSheet, esc, confirmSheet } from '../
 import { euro } from '../../core/money.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, localDateOf } from '../../core/dates.js';
-import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, hasEquivalents, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded, watchSuggestions } from '../../core/watch.js';
+import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded, watchSuggestions } from '../../core/watch.js';
 import { parseSize, detectBrand, parseOwnSize, sizeText as productSizeText } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
 
@@ -60,10 +60,6 @@ function details(x) {
 function thumb(o, size = 56) {
   if (!o.image) return html`<span class="kp-thumb" style="width:${size}px;height:${size}px"></span>`;
   return html`<img class="kp-thumb" src="${o.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" style="width:${size}px;height:${size}px">`;
-}
-function offerLink(o, label = null) {
-  if (!o.url) return '';
-  return html`<a href="${o.url}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">${label || `Bekijk bij ${storeName(o.store)}`} ↗</a>`;
 }
 
 /** Referentie: het product van jullie zelf als de aanbieding dat is, anders het goedkoopste wat jullie kopen. */

@@ -83,9 +83,15 @@ test('Hoogvliet: per-prijs, 2 voor, 1+1, en geen vaste prijzen/online/bezorging'
     item('5', 'Geraspte kaas', 'per stuk', 3.99, 3.99, 3.99, 'Vast Laag'),
     item('6', 'Zaanse mayonaise', 'per stuk', 1.49, 1.49, 1.49, 'online only'),
     item('7', 'Optimel', 'bij 12.50 gratis bezorging', undefined, 1.39, 1.39, 'gsk'),
+    { ...item('8', 'Coca-Cola, Fanta of Sprite', 'per fles', 1.49, 2.26, 1.49), is_promotion_group: true, child_skus: ['a', 'b'],
+      promotion_meta_data: { actietype: 'ACTIE', valid_to: '2026-10-27 00:00:00+00', promotie_beschrijving: 'Fles van 1 liter' } },
+    { ...item('9', 'Cola multipack', 'per pak', 8.94, 12.54, 8.94), is_promotion_group: true, child_skus: ['a', 'b'],
+      promotion_meta_data: { actietype: 'ACTIE', valid_to: '2026-10-27 00:00:00+00', promotie_beschrijving: 'Fles van 1 liter' } },
   ] }] }] } } };
   const o = parseHoogvliet(`<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script>`);
-  assert.deepEqual(o.map((x) => x.title), ['Spruiten verpakt', 'Trostomaten los', 'Druiven of mango', 'Gemengd gehakt']);
+  assert.deepEqual(o.map((x) => x.title), ['Spruiten verpakt', 'Trostomaten los', 'Druiven of mango', 'Gemengd gehakt', 'Coca-Cola, Fanta of Sprite', 'Cola multipack']);
+  assert.equal(o[5].size, null); // "per pak" + "Fles van 1 liter": een pak flessen, niet 1 liter voor € 8,94
+  assert.equal(o[4].size, 'Fles van 1 liter'); // inhoud uit de omschrijving van de groepsactie
   assert.deepEqual([o[0].price, o[0].was, o[0].size], [99, 149, null]);
   assert.deepEqual([o[1].price, o[1].size], [79, '500 gram']);
   assert.deepEqual(parseMechanism(o[2].mechanism, o[2]), { type: 'xvoor', n: 2, total: 399 });

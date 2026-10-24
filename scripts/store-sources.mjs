@@ -197,6 +197,13 @@ export function parseHoogvliet(html) {
       const v = String(attr.volume).replace('.', ',');
       size = /^stuk/i.test(attr.unit) ? (+attr.volume > 1 ? `${v} stuks` : null) : `${v} ${attr.unit.toLowerCase()}`;
     }
+    // Groepsacties: de inhoud staat in de omschrijving ("Fles van 1 liter", "Pak met 16 of 24 rollen").
+    // Alleen als die over hetzelfde gaat als de prijs: "per pak" met "Fles van 1 liter" is een pak flessen (aantal onbekend).
+    const desc = clean(meta.promotie_beschrijving || '') || '';
+    const perWord = (String(top || '').match(/^per\s+(\S+)/i) || [])[1]?.toLowerCase();
+    const descWord = (desc.match(/^\S+/) || [''])[0].toLowerCase();
+    const sameThing = !perWord || descWord.startsWith(perWord) || perWord.startsWith(descWord);
+    if (!size && sameThing && /\d\s*(liter|ltr|l|ml|cl|gram|gr|g|kg|kilo|rollen|rol|stuks|wasbeurten|tabletten|capsules)\b/i.test(desc)) size = desc;
     list.push({
       ref: it.sku, title: it.display_name || it.name, size, brand: null, price, was, mechanism,
       validFrom: day(String(meta.valid_from || per.validFrom || '').replace(' ', 'T').replace(/\+00$/, 'Z')),

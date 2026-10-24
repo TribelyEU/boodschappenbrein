@@ -3,7 +3,7 @@ import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../
 import { euro } from '../../core/money.js';
 import { parseOwnSize, sizeText } from '../../core/products.js';
 import { priceHistory, groupBy, inRange } from '../../core/analytics.js';
-import { CATEGORIES, categoryModel } from '../../core/categories.js';
+import { CATEGORIES } from '../../core/categories.js';
 import { storeName } from '../../core/stores.js';
 import { formatDate, addDays } from '../../core/dates.js';
 import { lineChart } from '../charts.js';
@@ -14,10 +14,9 @@ export default {
   render([id]) {
     const p = state.products.get(id);
     if (!p) return html`<div class="card">${empty('Product niet gevonden', 'Mogelijk is het samengevoegd of verwijderd.', html`<a class="btn" href="#/analyse">Terug</a>`)}</div>`;
-    const { facts, predictions, today } = derived();
+    const { facts, today } = derived();
     const pf = facts.filter((f) => f.productId === id);
     const hist = priceHistory(pf, id);
-    const pred = predictions.get(id);
     const rh = derived().rhythm.byProduct.get(id);
     const year = inRange(pf, addDays(today, -365), today);
     const spend = year.reduce((t, f) => t + f.net, 0);
@@ -28,7 +27,6 @@ export default {
     const points = hist.filter((h) => (useBase ? h.perBase != null : true)).map((h) => ({ x: formatDate(h.date, 'short'), y: useBase ? h.perBase : h.paidPerUnit, highlight: h.discounted }));
     const lines = state.lines.filter((l) => l.productId === id).sort((a, b) => b.date.localeCompare(a.date));
     const names = [...new Set(lines.map((l) => l.rawName))];
-    const model = p.model || categoryModel(p.category);
 
     return html`
       <div class="page-head">

@@ -5,7 +5,6 @@ import { euro } from '../../core/money.js';
 import { parseIngredient, amountText, searchRecipes } from '../../core/recipes.js';
 import { html, raw, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
 import { addDays, startOfWeek, formatDate } from '../../core/dates.js';
-import { findProducts } from '../../core/query.js';
 import { productTokens } from '../../core/products.js';
 import { empty } from '../components.js';
 import { storeName } from '../../core/stores.js';
@@ -96,7 +95,6 @@ export default {
     const { today } = derived();
     const monday = addDays(startOfWeek(today), weekOffset * 7);
     const meals = [...state.meals].sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
-    const byId = new Map(meals.map((m) => [m.id, m]));
     return html`
       <div class="page-head"><div><h1>Weekmenu</h1></div>
         <button class="btn small primary" data-action="recipes">${icon('search', 16)}Recept zoeken</button></div>

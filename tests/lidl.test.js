@@ -100,3 +100,11 @@ for (const variant of ['', 'app-']) for (const [i, [date, total, n]] of Object.e
     if (+i === 2) assert.deepEqual([r.extra[0].total, r.extra[0].date], [-845, '2026-08-07'], 'retourbon');
   });
 }
+
+test('Lidl: artikelnummer achter de naam valt weg (ook met OCR-ruis)', async () => {
+  const { parseLidlReceipt } = await import('../js/core/lidl-receipt.js');
+  const txt = `Lidl Zoetermeer\nOMSCHRIJVING EUR\nLunchbox/drinkfles-0538827 7,99 C\nLunchbox/drinkfles-0@538827 7,99 C\nTotaal 15,98\nBankpas 15,98`;
+  const r = parseLidlReceipt(txt);
+  const names = (r.lines || r.items || []).map((l) => l.name || l.rawName).filter(Boolean);
+  assert.ok(names.length >= 1 && names.every((n) => n === 'Lunchbox/drinkfles'), JSON.stringify(names));
+});

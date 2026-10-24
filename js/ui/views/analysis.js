@@ -79,11 +79,11 @@ function spendingTab(q) {
           ${!showProducts && groupKey === 'categorie' ? catDot(gr.key) : ''}
           <div class="grow">
             <div class="title">${label(gr.key)}</div>
-            <div class="sub">${gr.count}× ${gr.discount < 0 ? `· ${euro(-gr.discount)} korting` : ''}</div>
+            <div class="sub">${gr.net < 0 ? `${gr.count}× korting op de bon` : `${gr.count}×${gr.discount < 0 ? ` · ${euro(-gr.discount)} korting` : ''}`}</div>
           </div>
           <div style="text-align:right">
             <div class="amount num">${euro(gr.net)}</div>
-            <div class="tiny muted num">${sum ? Math.round((gr.net / sum) * 100) : 0}%</div>
+            ${gr.net >= 0 ? html`<div class="tiny muted num">${sum ? Math.round((gr.net / sum) * 100) : 0}%</div>` : ''}
           </div>
         </div>`;
       })}</div>` : html`<p class="muted">Geen aankopen in deze periode.</p>`}

@@ -87,7 +87,6 @@ export function savingsAdvice(facts, products, today, extra = {}) {
     if (hist.length >= 6) {
       const promo = hist.filter((h) => h.discounted && !h.normalUnknown && h.paidPerUnit < h.normalPerUnit);
       const regular = hist.filter((h) => !h.discounted);
-      const knownPct = promo.length >= 2;
       if (promo.length >= 2 && regular.length >= 3) {
         const avgPromoPct = promo.reduce((t, h) => t + (h.normalPerUnit - h.paidPerUnit) / h.normalPerUnit, 0) / promo.length;
         const regularSpendPerMonth = regular.reduce((t, h) => t + h.normalPerUnit * h.qty, 0) / months;
@@ -169,14 +168,6 @@ export function savingsAdvice(facts, products, today, extra = {}) {
   return { advice, realized, enoughData: true, theoreticalMonthly, months };
 }
 
-/** Meest gekochte producten (aantal aankopen) in de laatste 180 dagen. */
-export function frequentProducts(facts, products, today, limit = 10) {
-  const window = inRange(facts, addDays(today, -180), today).filter((f) => f.productId && f.gross > 0);
-  return groupBy(window, (f) => f.productId)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit)
-    .map((g) => ({ productId: g.key, name: products.get(g.key)?.name || g.facts[0].name, count: g.count, net: g.net }));
-}
 
 function unitWord(row) {
   if (row.weighed) return 'kilo';

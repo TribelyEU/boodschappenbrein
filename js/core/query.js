@@ -246,15 +246,5 @@ export function runQuery(q, ctx) {
   }
 }
 
-export const EXAMPLE_QUESTIONS = [
-  'Hoeveel hebben we dit jaar aan melk uitgegeven?',
-  'Wat zijn onze tien duurste producten?',
-  'Hoeveel betalen we gemiddeld voor koffie?',
-  'Welke boodschappen zijn het sterkst in prijs gestegen?',
-  'Wat hebben we afgelopen maand bij Albert Heijn uitgegeven?',
-  'Hoeveel kunnen we besparen op huismerken?',
-  'Welke producten moeten we volgende week waarschijnlijk kopen?',
-  'Wat komt binnenkort in de aanbieding?',
-];
 
 export { CATEGORIES };

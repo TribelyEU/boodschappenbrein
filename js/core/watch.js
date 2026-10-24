@@ -101,7 +101,13 @@ function unitPriceOf(offer, unit, deal) {
   const normal = offer.was ?? (deal.type !== 'prijs' && offer.price != null && !needsNormal ? offer.price : null);
   if (needsNormal && normal == null) return { deal, packPrice: null, perUnit: null };
   const eff = effectiveDeal(deal, normal ?? 0);
-  const { size } = offerSize(offer);
+  let { size } = offerSize(offer);
+  // "Omo 75 wasbeurten, 3,75 liter": de inhoud in liters zegt niets per wasbeurt, het aantal in de titel wel
+  if (unit.base && (!size || size.unit !== unit.base)) {
+    const alt = [offer.size, offer.title].flatMap((t) => sizesIn(t).options).filter((o) => o.unit === unit.base);
+    const distinct = alt.filter((o, i) => alt.findIndex((x) => x.amount === o.amount) === i);
+    if (distinct.length === 1) size = distinct[0];
+  }
   const packPrice = eff.unitPrice;
   if (unit.base == null) return { deal, eff, packPrice, perUnit: packPrice, size: size || null, units: 1 };
   if (!size || size.unit !== unit.base) return { deal, eff, packPrice, perUnit: null, size: size || null };

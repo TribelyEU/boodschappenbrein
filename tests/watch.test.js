@@ -260,3 +260,12 @@ test('voorstellen voor de volglijst: veel uitgegeven of vaak gekocht, nog niet g
   assert.equal(s[1].unit, 'liter');
   assert.deepEqual(watchSuggestions(facts, products, [], { today: '2026-10-23', dismissed: ['a'] }).map((x) => x.productId), ['c', 'b']);
 });
+
+test('prijs per wasbeurt uit de titel als de inhoud in liters staat', async () => {
+  const { offerUnitPrice } = await import('../js/core/watch.js');
+  const r = offerUnitPrice({ store: 'dirk', title: 'Omo Vloeibaar wasmiddel semiconc wit 75 wasbeurten', size: '3,75 liter', price: 749, was: 1499, mechanism: 'voor 7,49' }, 'wasbeurt');
+  assert.equal(r.perUnit, 10);
+  // bereik (60-77) blijft onbekend: dat kunnen we niet eerlijk uitrekenen
+  const q = offerUnitPrice({ store: 'ah', title: 'Alle Reus wasmiddelen 60-77 wasbeurten', price: 899, mechanism: 'VOOR 8.99' }, 'wasbeurt');
+  assert.equal(q.perUnit, null);
+});
