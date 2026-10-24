@@ -30,29 +30,43 @@ function reminders() {
 
 const weeksText = (days) => (days < 10 ? `${days} dagen` : `${Math.round(days / 7)} weken`);
 
-/** Aanbieding voor een lijstregel (gecachet per versie). */
 const dcache = { v: -1, map: new Map() };
-function dealFor(it) {
+
+/** Aanbieding voor een lijstregel (gecachet per versie). Zonder storeIds: de goedkoopste in al jullie winkels. */
+function dealFor(it, storeIds = null) {
   if (dcache.v !== state.version) { dcache.v = state.version; dcache.map = new Map(); }
-  const k = `${it.name}|${it.productId || ''}`;
+  const stores = storeIds || (state.settings.myStores || []).map((s) => s.id);
+  const k = `${it.name}|${it.productId || ''}|${stores.join(',')}`;
   if (!dcache.map.has(k)) {
     const d = derived();
     const offers = state.offers?.data?.offers || [];
     const key = productTokens(it.name).join(' ');
     const pseudo = key ? new Map([['x', { id: 'x', key, name: it.name }]]) : null;
     const matchByName = pseudo ? (o) => matchOffer(o, pseudo).length > 0 : null;
-    dcache.map.set(k, dealForListItem(it.name, { offers, watchlist: state.settings.watchlist || [], ratings: state.settings.ratings || [], choices: state.settings.offerChoices || {}, today: d.today, stores: (state.settings.myStores || []).map((s) => s.id), matchByName }));
+    dcache.map.set(k, dealForListItem(it.name, { offers, watchlist: state.settings.watchlist || [], ratings: state.settings.ratings || [], choices: state.settings.offerChoices || {}, today: d.today, stores, matchByName }));
   }
   return dcache.map.get(k);
 }
 
-function dealLine(deal) {
+/** Aanbiedingen op de openstaande lijstregels: de goedkoopste en wat er bij jullie eigen winkel geldt. */
+export function openDeals() {
+  const fav = state.settings.favoriteStore || null;
+  return state.list.filter((it) => !it.checked).map((it) => {
+    const deal = dealFor(it);
+    const own = fav && (!deal || deal.offer.store !== fav) ? dealFor(it, [fav]) : null;
+    return { item: it, deal, own, fav };
+  }).filter((x) => x.deal || x.own);
+}
+
+function dealLine(deal, own = null, fav = null) {
   if (!deal) return '';
   const o = deal.offer;
   const unit = deal.watch ? unitOf(deal.watch).label : null;
   const what = o.mechanism || (deal.packPrice != null ? `voor ${euro(deal.packPrice)}` : 'aanbieding');
   const per = deal.perUnit != null && unit ? ` · ${euro(deal.perUnit)} per ${unit}` : '';
-  return html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} ${storeName(o.store)}: ${what}${per}${deal.count > 1 ? ` · nog ${deal.count - 1} andere` : ''}${o.url ? html` · <a href="${o.url}" target="_blank" rel="noopener noreferrer">bekijk ↗</a>` : ''}</div>`;
+  const ownText = fav && deal.offer.store !== fav
+    ? (own ? ` · bij ${storeName(fav)}: ${own.offer.mechanism || (own.packPrice != null ? euro(own.packPrice) : 'aanbieding')}` : ` · bij ${storeName(fav)} geen aanbieding`) : '';
+  return html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} ${storeName(o.store)}: ${what}${per}${deal.count > 1 ? ` · nog ${deal.count - 1} andere` : ''}${ownText}${o.url ? html` · <a href="${o.url}" target="_blank" rel="noopener noreferrer">bekijk ↗</a>` : ''}</div>`;
 }
 
 function encodeList(items) {
@@ -124,7 +138,7 @@ export default {
             <div class="grow">
               <div class="title">${it.name}</div>
               ${it.note || it.source === 'menu' ? html`<div class="sub" style="white-space:normal">${it.note || 'uit weekmenu'}</div>` : ''}
-              ${it.source === 'koopje' ? '' : dealLine(dealFor(it))}
+              ${it.source === 'koopje' ? '' : dealLine(dealFor(it), state.settings.favoriteStore && dealFor(it)?.offer.store !== state.settings.favoriteStore ? dealFor(it, [state.settings.favoriteStore]) : null, state.settings.favoriteStore || null)}
             </div>
             <div class="stepper">
               <button data-action="qty" data-id="${it.id}" data-d="-1" aria-label="Minder">−</button>

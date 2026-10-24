@@ -36,6 +36,12 @@ export default {
         </div>
 
         <div class="card">
+          <h2>Mijn winkel</h2>
+          <p class="muted small">Op de lijst en bij Koopjes zie je ook wat het bij deze winkel kost, naast de goedkoopste.</p>
+          <select class="input" data-change="favoriteStore"><option value="">Geen</option>${(state.settings.myStores || []).map((m) => html`<option value="${m.id}" ${state.settings.favoriteStore === m.id ? 'selected' : ''}>${storeName(m.id)}</option>`)}</select>
+        </div>
+
+        <div class="card">
           <h2>Standaardwinkel</h2>
           <p class="muted small">Wordt ingevuld als een bon of tabel geen herkenbare supermarkt bevat.</p>
           <select class="input" data-change="defaultStore"><option value="">Geen</option>${STORES.map((s) => html`<option value="${s.id}" ${state.settings.defaultStore === s.id ? 'selected' : ''}>${s.name}</option>`)}</select>
@@ -105,6 +111,7 @@ export default {
     async offersUrl(el) { await setSetting('offersUrl', el.value.trim()); const { refreshOffers } = await import('../../data/store.js'); refreshOffers(); },
     async hasFreezer(el) { await setSetting('hasFreezer', el.checked); },
     async freezerCap2(el) { await setSetting('freezerCapacity', Math.max(5, Math.min(400, +el.value || 40))); },
+    async favoriteStore(el) { await setSetting('favoriteStore', el.value || null); },
     async defaultStore(el) { await setSetting('defaultStore', el.value || null); },
     async mode(el) { usage = null; await setMode(el.dataset.m); toast(el.dataset.m === 'demo' ? 'Demomodus: fictieve gegevens' : 'Uw eigen gegevens'); },
     async wipe() {

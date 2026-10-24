@@ -9,6 +9,25 @@ import { formatDate, localDateOf } from '../../core/dates.js';
 import { WATCH_UNITS, unitOf, unitKeyOf, watchHistory, weekKey, ownLastPurchase, newWatchItem, watchOffers, normalPriceIn, ownCandidates, refsOf, matchesEntry, MAX_REFS, entryPriceIn, matchesWatch, isExcluded, watchSuggestions } from '../../core/watch.js';
 import { parseSize, detectBrand, parseOwnSize, sizeText as productSizeText } from '../../core/products.js';
 import { priceStats } from '../../core/stockpile.js';
+import { openDeals } from './list.js';
+
+
+/** Bovenaan: wat er op jullie lijst in de aanbieding staat, en wat dat bij jullie eigen winkel kost. */
+function listBlock() {
+  const rows = openDeals().slice(0, 8);
+  if (!rows.length) return '';
+  const fav = state.settings.favoriteStore;
+  const priceOf = (x) => x.offer.mechanism || (x.packPrice != null ? euro(x.packPrice) : 'aanbieding');
+  return html`<div class="card" style="margin-bottom:16px">
+    <h2>Op jullie lijst</h2>
+    <p class="muted small">Goedkoopste aanbieding${fav ? `, en wat het bij ${storeName(fav)} kost` : ''}.</p>
+    ${rows.map(({ item, deal, own }) => html`<div class="kp-row" style="padding:8px 0;border-top:1px solid var(--line, #eee)">
+      <div class="grow"><div class="title" style="font-size:15px">${item.name}</div>
+        <div class="tiny" style="color:var(--good);font-weight:650">${deal ? html`${icon('tag', 12)} ${storeName(deal.offer.store)}: ${priceOf(deal)}` : html`<span class="muted">Geen aanbieding</span>`}</div>
+        ${fav && deal?.offer.store !== fav ? html`<div class="tiny muted">${own ? `Bij ${storeName(fav)}: ${priceOf(own)}` : `Bij ${storeName(fav)} geen aanbieding`}</div>` : ''}
+      </div></div>`)}
+  </div>`;
+}
 
 const hcache = { v: -1, map: new Map() };
 let busy = false;
@@ -189,6 +208,8 @@ export default {
     return html`
       <div class="page-head"><div><h1>Koopjes</h1><p class="muted">${status}</p></div>
         <button class="btn small ghost" data-action="refresh" ${busy ? 'disabled' : ''}>${busy ? html`<span class="spinner"></span>` : 'Vernieuwen'}</button></div>
+
+      ${listBlock()}
 
       ${todo.length ? html`<button class="big-action" data-action="swipe" style="margin-bottom:16px;width:100%;text-align:left">
         <span class="ic">${icon('tag', 22)}</span><span>${todo.length} nieuwe aanbieding${todo.length === 1 ? '' : 'en'}<small>Snel beoordelen</small></span></button>` : ''}
