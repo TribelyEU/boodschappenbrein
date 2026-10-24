@@ -121,7 +121,7 @@ export function productsForOffer(idx, offer, { limit = 40 } = {}) {
       const hits = r.rest.filter((w) => has(toks, w) || hasHead(toks, w)).length;
       if (hits >= r.need) best = Math.max(best, hits + r.brandWords.length);
     }
-    if (best) out.push({ name: it.name, price: it.price, sizeText: it.sizeText, sizeAmount: it.sizeAmount, sizeUnit: it.sizeUnit, hits: best });
+    if (best) out.push({ id: it.id || null, name: it.name, price: it.price, sizeText: it.sizeText, sizeAmount: it.sizeAmount, sizeUnit: it.sizeUnit, hits: best });
   }
   return out.sort((a, b) => b.hits - a.hits || a.price - b.price).slice(0, limit);
 }

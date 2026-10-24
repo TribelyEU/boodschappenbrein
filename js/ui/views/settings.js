@@ -4,6 +4,7 @@ import { STORES, storeName } from '../../core/stores.js';
 import { formatDate, todayISO, localDateOf } from '../../core/dates.js';
 import { validateBackup } from '../../core/backup.js';
 import { currentVersion, checkForUpdate, reloadApp } from '../../app/update.js';
+import { backupNow, daysSinceBackup } from '../../app/backup.js';
 
 let usage = null;
 
@@ -19,9 +20,10 @@ export default {
           <p class="muted small">${state.receipts.length} bonnen · ${state.lines.length} regels · ${state.products.size} producten. Alles staat alleen op deze telefoon${usage?.usage ? ` (${(usage.usage / 1048576).toFixed(1).replace('.', ',')} MB)` : ''}.
           ${usage && usage.persisted === false ? html`<br><span style="color:var(--warn)">De browser heeft permanente opslag niet bevestigd. Maak regelmatig een back-up.</span>` : ''}</p>
           <div class="btn-row">
-            <button class="btn primary" data-action="backup">${icon('import', 16)}Back-up downloaden</button>
+            <button class="btn primary" data-action="backup">${icon('share', 16)}Back-up maken</button>
             <label class="btn">Back-up terugzetten…<input type="file" accept=".json,application/json" class="sr-only" data-change="restore"></label>
           </div>
+          <p class="small" style="margin:8px 0 0">${daysSinceBackup() == null ? 'Nog geen back-up gemaakt.' : daysSinceBackup() === 0 ? 'Laatste back-up: vandaag.' : `Laatste back-up: ${daysSinceBackup()} dag${daysSinceBackup() === 1 ? '' : 'en'} geleden.`} <span class="muted">Op de iPhone: kies "Bewaar in Bestanden" (bijv. iCloud Drive).</span></p>
           <p class="muted tiny" style="margin-bottom:0">De back-up bevat bonnen, producten, lijst, weekmenu, volglijst, jullie oordelen over aanbiedingen en instellingen. Zet hem op een andere telefoon terug om daar verder te gaan.</p>
         </div>
 
@@ -74,11 +76,7 @@ export default {
       try { await checkForUpdate({ force: true }); } catch { toast('Geen verbinding'); return; }
       reloadApp();
     },
-    async backup() {
-      const b = await exportBackup();
-      download(`boodschappenbrein-backup-${todayISO()}.json`, JSON.stringify(b));
-      toast(`Back-up gemaakt (${b.counts.receipts} bonnen)`);
-    },
+    async backup() { await backupNow(); },
     async restore(el) {
       const file = el.files[0];
       el.value = '';

@@ -3,7 +3,7 @@ import { matchIngredient, assortmentIndex, assortmentReady, priceFor } from '../
 import { dishCost } from '../../core/ah.js';
 import { euro } from '../../core/money.js';
 import { parseIngredient, amountText, searchRecipes } from '../../core/recipes.js';
-import { html, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
+import { html, raw, icon, toast, openSheet, closeSheet, confirmSheet, esc } from '../dom.js';
 import { addDays, startOfWeek, formatDate } from '../../core/dates.js';
 import { findProducts } from '../../core/query.js';
 import { productTokens } from '../../core/products.js';
@@ -24,13 +24,20 @@ function costOf(meal) {
   if (!costCache.has(key)) costCache.set(key, dishCost(meal.ingredients, priceFor));
   return costCache.get(key);
 }
+/** "€ 9,10" met eronder "was € 12,40" als de aanbiedingen schelen. */
+function priceHtml(c, { small = false } = {}) {
+  if (c.total == null) return '<span class="tiny muted">onvolledig</span>';
+  const now = `<strong class="num"${small ? '' : ' style="font-size:16px"'}>${euro(c.dealTotal)}</strong>`;
+  return c.saving >= 50 ? `${now}<span class="tiny" style="display:block;color:var(--good);font-weight:650">bonus −${euro(c.saving)}</span>` : now;
+}
 function costLines(c) {
   const src = (l) => (l.source === 'eigen' ? 'jullie prijs' : 'AH');
   return `<div class="rows">${c.lines.map((l) => `<div class="row-item" style="min-height:0;padding:6px 0;gap:8px">
-      <span class="grow" style="white-space:normal;font-size:13px">${esc(l.ing.name)}<span class="muted tiny" style="display:block">${l.packs > 1 ? `${l.packs}× ` : ''}${esc(l.name)} · ${src(l)}</span></span>
-      <span class="num small">${euro(l.cost)}</span></div>`).join('')}</div>
+      <span class="grow" style="white-space:normal;font-size:13px">${esc(l.ing.name)}<span class="muted tiny" style="display:block">${l.packs > 1 ? `${l.packs}× ` : ''}${esc(l.name)} · ${src(l)}</span>
+        ${l.deal ? `<span class="tiny" style="display:block;color:var(--good);font-weight:650">Bonus: ${esc(l.deal.mechanism.toLowerCase())}${l.deal.validTo ? ` t/m ${esc(formatDate(l.deal.validTo, 'short'))}` : ''}${l.saving ? '' : ' (scheelt pas bij meer stuks)'}</span>` : ''}</span>
+      <span class="num small" style="text-align:right">${l.saving ? `<s class="muted tiny">${euro(l.cost)}</s><br>` : ''}${euro(l.dealCost)}</span></div>`).join('')}</div>
     ${c.missing.length ? `<p class="tiny" style="color:var(--warn);margin-top:6px">Geen prijs voor: ${esc(c.missing.join(', '))}</p>` : ''}
-    <p class="tiny muted" style="margin-top:4px">Hele verpakkingen, gewone prijzen. Wat meestal in huis is telt niet mee.</p>`;
+    <p class="tiny muted" style="margin-top:4px">Hele verpakkingen bij AH, met de AH-bonus van deze week. Wat meestal in huis is telt niet mee.</p>`;
 }
 
 /** Welke ingrediënten zijn deze week in de aanbieding (via de volglijst of een duidelijke naamovereenkomst)? */
@@ -64,7 +71,7 @@ function editMeal(meal = { name: '', ingredients: [], kids: true, favorite: fals
       <label class="field">Naam<input class="input" name="name" value="${esc(meal.name)}" required></label>
       <label class="field">Ingrediënten (één per regel, optioneel aantal ervoor: "2 paprika")
         <textarea class="input" name="ing" rows="8">${esc(meal.ingredients.map(ingLine).join('\n'))}</textarea></label>
-      ${meal.id && meal.ingredients.length ? (() => { const c = costOf(meal); return `<details class="card tight" style="margin:0"><summary class="small" style="font-weight:650">Boodschappen ${c.total != null ? euro(c.total) : 'prijs onvolledig'}</summary>${costLines(c)}</details>`; })() : ''}
+      ${meal.id && meal.ingredients.length ? (() => { const c = costOf(meal); return `<details class="card tight" style="margin:0"><summary class="small" style="font-weight:650">Boodschappen ${c.total != null ? euro(c.dealTotal) : 'prijs onvolledig'}${c.saving >= 50 ? ` <span style="color:var(--good)">(bonus −${euro(c.saving)})</span>` : ''}</summary>${costLines(c)}</details>`; })() : ''}
       ${meal.url ? `<a href="${esc(meal.url)}" target="_blank" rel="noopener noreferrer" class="small" style="font-weight:600">Bereiding op lekkerensimpel.com ↗</a>` : ''}
       <label class="gap8"><input type="checkbox" name="kids" ${meal.kids ? 'checked' : ''}> Kindvriendelijk</label>
       <label class="gap8"><input type="checkbox" name="favorite" ${meal.favorite ? 'checked' : ''}> Favoriet</label>
@@ -120,7 +127,7 @@ export default {
           <div class="grow"><div class="title">${m.favorite ? '★ ' : ''}${m.name}</div>
           <div class="sub">${[m.time ? `${m.time} min` : '', `${m.ingredients.length} ingrediënten`, m.kids ? 'kindvriendelijk' : ''].filter(Boolean).join(' · ')}</div>
           ${deals.length ? html`<div class="tiny" style="color:var(--good);font-weight:650;margin-top:2px;white-space:normal">${icon('tag', 12)} In de aanbieding: ${deals.join(', ')}</div>` : ''}</div>
-          ${cost.total != null ? html`<span class="num" style="font-weight:700;white-space:nowrap">${euro(cost.total)}</span>` : ''}
+          ${cost.total != null ? html`<span style="text-align:right;white-space:nowrap">${raw(priceHtml(cost, { small: true }))}</span>` : ''}
           ${icon('chevron', 16)}
         </div>`;
       })}</div></div>` : html`<div class="card">${empty('Nog geen gerechten', 'Voeg jullie vaste gerechten toe, zoals pasta bolognese of nasi.')}</div>`}`;
@@ -179,7 +186,7 @@ function weekToList(monday) {
 
 // ---------- recepten zoeken (Lekker en Simpel) ----------
 const rs = { q: '', main: true, quick: false, sort: 'relevant' };
-const SORTS = [['relevant', 'Nieuw'], ['cost', 'Voordeligst'], ['rating', 'Best beoordeeld']];
+const SORTS = [['relevant', 'Nieuw'], ['cost', 'Voordeligst'], ['bonus', 'Bonus'], ['rating', 'Beoordeeld']];
 const recipeCost = new Map(); // url|versie → kosten voor het gezin
 
 /** Boodschappen voor dit recept, omgerekend naar het gezin (hele verpakkingen, zonder voorraadkast). */
@@ -212,12 +219,12 @@ async function recipeSheet() {
       ${r.image ? `<img class="kp-thumb" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" style="width:64px;height:48px;object-fit:cover">` : '<span class="kp-thumb" style="width:64px;height:48px"></span>'}
       <span class="grow" style="min-width:0"><span class="title" style="white-space:normal;display:block">${esc(r.name)}</span>
         <span class="sub">${esc([r.time ? `${r.time} min` : '', stars(r), `${r.ingredients.length} ingrediënten`].filter(Boolean).join(' · '))}</span></span>
-      ${cost ? (cost.total != null ? `<span style="text-align:right;flex:none"><strong class="num">${euro(cost.total)}</strong><span class="tiny muted" style="display:block">voor ${FAMILY}</span></span>` : '<span class="tiny muted" style="flex:none">onvolledig</span>') : ''}
+      ${cost ? `<span style="text-align:right;flex:none">${priceHtml(cost)}</span>` : ''}
     </button>`;
   const draw = async () => {
     const id = ++run;
     const opts = { maxTime: rs.quick ? 30 : null, category: rs.main ? 'hoofdgerecht' : null };
-    if (rs.sort !== 'cost') {
+    if (rs.sort !== 'cost' && rs.sort !== 'bonus') {
       const found = searchRecipes(list, rs.q, { ...opts, sort: rs.sort, limit: 40 });
       const note = rs.sort === 'rating' && !found.some((r) => r.rating) ? '<p class="tiny muted" style="margin:6px 0">De beoordelingen worden nog opgehaald.</p>' : '';
       box.innerHTML = found.length ? `${note}<div class="rows">${found.map((r) => row(r, null)).join('')}</div>` : '<p class="muted small" style="padding:12px 0">Niets gevonden.</p>';
@@ -241,10 +248,17 @@ async function recipeSheet() {
         if (id !== run) return;
       }
     }
-    const withCost = found.map((r) => ({ r, c: costForFamily(r, price) }));
-    withCost.sort((a, b) => (a.c.total ?? Infinity) - (b.c.total ?? Infinity));
-    box.innerHTML = `<p class="tiny muted" style="margin:6px 0">Boodschappen voor ${FAMILY} personen bij AH: hele verpakkingen, gewone prijzen, zonder wat meestal in huis is.</p>
-      <div class="rows">${withCost.slice(0, 40).map(({ r, c }) => row(r, c)).join('')}</div>`;
+    let withCost = found.map((r) => ({ r, c: costForFamily(r, price) }));
+    if (rs.sort === 'bonus') {
+      // Deze week in de bonus: waar de aanbiedingen het meest schelen (minstens een euro)
+      withCost = withCost.filter((x) => x.c.total != null && x.c.saving >= 100).sort((a, b) => b.c.saving - a.c.saving || a.c.dealTotal - b.c.dealTotal);
+    } else withCost.sort((a, b) => (a.c.dealTotal ?? Infinity) - (b.c.dealTotal ?? Infinity));
+    const intro = rs.sort === 'bonus'
+      ? `Hier scheelt de AH-bonus van deze week het meest. Prijzen voor ${FAMILY} personen.`
+      : `Boodschappen voor ${FAMILY} personen bij AH, met de bonus van deze week. Hele verpakkingen, zonder wat meestal in huis is.`;
+    box.innerHTML = withCost.length ? `<p class="tiny muted" style="margin:6px 0">${intro}</p>
+      <div class="rows">${withCost.slice(0, 40).map(({ r, c }) => row(r, c)).join('')}</div>`
+      : '<p class="muted small" style="padding:12px 0">Deze week geen recepten waarbij de bonus minstens een euro scheelt.</p>';
   };
   draw();
   let t;
@@ -284,7 +298,7 @@ function recipePreview(r) {
       <span class="num" style="width:76px;flex:none;font-weight:650">${esc(amountText(p, f))}</span>
       <span class="grow" style="white-space:normal">${esc(p.name)}${p.optional ? ' <span class="muted tiny">optioneel</span>' : ''}</span></div>`).join('')}</div>`;
     const c = dishCost(parsed.map((p) => toIngredient(p, f)), priceFor);
-    sheet.querySelector('[data-cost]').innerHTML = `<details><summary class="quiet-line" style="cursor:pointer"><span class="small" style="font-weight:650">Boodschappen</span><strong class="num">${c.total != null ? euro(c.total) : `<span class="muted small">onvolledig</span>`}</strong></summary>${costLines(c)}</details>`;
+    sheet.querySelector('[data-cost]').innerHTML = `<details><summary class="quiet-line" style="cursor:pointer"><span class="small" style="font-weight:650">Boodschappen</span><span style="text-align:right">${priceHtml(c)}</span></summary>${costLines(c)}</details>`;
   };
   if (!assortmentReady()) assortmentIndex().then(() => sheet.isConnected && draw()).catch(() => {});
   draw();

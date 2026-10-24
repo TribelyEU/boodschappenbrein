@@ -9,9 +9,10 @@ import { dueRepeaters, repeaterCandidates } from '../../core/repeat.js';
 import { dealForListItem, unitOf } from '../../core/watch.js';
 import { matchOffer } from '../../core/offers.js';
 import { productTokens } from '../../core/products.js';
-import { ahLink, choiceKey, packsForListItem } from '../../core/ah.js';
+import { ahLink, choiceKey, packsForListItem, dealCost } from '../../core/ah.js';
+import { backupDue, daysSinceBackup, backupNow, snoozeBackup } from '../../app/backup.js';
 import { parseSize } from '../../core/products.js';
-import { assortmentIndex, ahSuggest, ahSearch, saveAhChoices } from '../../data/lookup.js';
+import { assortmentIndex, ahSuggest, ahSearch, saveAhChoices, dealFor as ahDealFor } from '../../data/lookup.js';
 
 function categoryOf(item) {
   if (item.category) return item.category;
@@ -90,6 +91,12 @@ export default {
         <button class="btn small primary" data-action="toAh" ${open.length ? '' : 'disabled'}>Naar AH</button></div>
       </div>
 
+      ${backupDue() ? html`<div class="notice" style="margin-bottom:14px;display:flex;gap:10px;align-items:center">
+        <div class="grow"><strong>Tijd voor een back-up</strong><div class="small muted">${daysSinceBackup() == null ? 'Er is nog geen back-up gemaakt.' : `Laatste back-up: ${daysSinceBackup()} dagen geleden.`} Je gegevens staan alleen op deze telefoon.</div></div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex:none">
+          <button class="btn small primary" data-action="backupNow">Back-up maken</button>
+          <button class="btn small ghost" data-action="backupLater">Later</button></div>
+      </div>` : ''}
       ${incoming.length ? html`<div class="card" style="margin-bottom:14px">
         <h2>Gedeelde lijst ontvangen</h2>
         <p class="muted">${incoming.length} producten: ${incoming.map((i) => `${i.qty}× ${i.name}`).join(', ')}</p>
@@ -152,6 +159,8 @@ export default {
   },
   actions: {
     toAh() { ahSheet(); },
+    async backupNow() { await backupNow(); },
+    async backupLater() { await snoozeBackup(7); },
     async add(form) {
       const fd = new FormData(form);
       const name = String(fd.get('name') || '').trim();
@@ -260,7 +269,8 @@ async function ahSheet() {
   const packs = (r) => packsForListItem(r.it, parseSize(r.pick?.sizeText) || parseSize(r.pick?.name));
   const draw = () => {
     const chosen = rows.filter((r) => r.on && r.pick);
-    const total = chosen.reduce((t, r) => t + r.pick.price * packs(r), 0);
+    const normal = chosen.reduce((t, r) => t + r.pick.price * packs(r), 0);
+    const total = chosen.reduce((t, r) => t + dealCost(packs(r), r.pick.price, ahDealFor(r.pick.id)), 0);
     body.innerHTML = `
       <p class="muted small" style="margin:2px 0 8px">Controleer de producten. Daarna opent ah.nl en staat alles in je mandje.</p>
       <div class="rows">${rows.map((r, i) => `
@@ -268,15 +278,15 @@ async function ahSheet() {
           <input type="checkbox" data-on="${i}" ${r.on ? 'checked' : ''} ${r.pick ? '' : 'disabled'} style="width:20px;height:20px;margin-top:2px;flex:none">
           <div class="grow" style="min-width:0">
             <div class="title" style="white-space:normal">${esc(r.it.name)}${r.it.note ? ` <span class="muted small">${esc(r.it.note)}</span>` : ''}</div>
-            <div class="sub" style="white-space:normal">${r.pick ? `${packs(r) > 1 ? `<strong>${packs(r)}×</strong> ` : ''}${esc(r.pick.name)}${r.pick.sizeText ? ` · ${esc(r.pick.sizeText)}` : ''} · ${euro(r.pick.price)}` : 'Geen AH-product gevonden'}</div>
+            <div class="sub" style="white-space:normal">${r.pick ? `${packs(r) > 1 ? `<strong>${packs(r)}×</strong> ` : ''}${esc(r.pick.name)}${r.pick.sizeText ? ` · ${esc(r.pick.sizeText)}` : ''} · ${euro(r.pick.price)}${ahDealFor(r.pick.id) ? ` · <span style="color:var(--good);font-weight:650">bonus: ${esc(ahDealFor(r.pick.id).mechanism.toLowerCase())}</span>` : ''}` : 'Geen AH-product gevonden'}</div>
             ${r.open ? `<div style="margin-top:6px"><input class="input small" data-q="${i}" value="${esc(r.q ?? r.it.name)}" placeholder="Zoek bij AH">
               <div data-res="${i}"></div></div>` : ''}
           </div>
           <button class="kp-link" data-edit="${i}" style="margin-top:0">${r.open ? 'Klaar' : r.pick ? 'Wijzig' : 'Zoek'}</button>
         </div>`).join('')}</div>
-      <div class="quiet-line" style="margin-top:12px"><span class="muted small">Totaal bij AH (zonder bonus)</span><strong class="num">${euro(total)}</strong></div>
+      <div class="quiet-line" style="margin-top:12px"><span class="muted small">Totaal bij AH${normal - total >= 50 ? ` <span style="color:var(--good);font-weight:650">(bonus −${euro(normal - total)})</span>` : ''}</span><strong class="num">${euro(total)}</strong></div>
       <a class="btn primary block" style="margin-top:10px${chosen.length ? '' : ';pointer-events:none;opacity:.5'}" data-go target="_blank" rel="noopener" href="${esc(ahLink(chosen.map((r) => ({ id: r.pick.id, qty: packs(r) }))) || '#')}">Open AH met ${chosen.length} product${chosen.length === 1 ? '' : 'en'}</a>
-      <p class="tiny muted" style="margin-top:6px">Je moet op ah.nl ingelogd zijn. Prijzen: gewone AH-prijzen, kunnen een paar dagen oud zijn.</p>`;
+      <p class="tiny muted" style="margin-top:6px">Je moet op ah.nl ingelogd zijn. Gewone AH-prijzen kunnen een paar dagen oud zijn; de bonus is die van deze week.</p>`;
     rows.forEach((r, i) => { if (r.open) results(i); });
   };
   const results = (i) => {

@@ -163,3 +163,31 @@ test('stuks omrekenen en de voordeligste verpakking', () => {
   assert.equal(parseIngredient('eventueel 1 bosui').optional, true);
   assert.equal(parseIngredient('eventueel 1 bosui').name, 'bosui');
 });
+
+import { dealCost } from '../js/core/ah.js';
+test('kosten met een aanbieding: alleen wat je echt bespaart', () => {
+  assert.equal(dealCost(1, 400, { mechanism: '2e GRATIS' }), 400);       // je hebt er maar één nodig
+  assert.equal(dealCost(2, 400, { mechanism: '2e GRATIS' }), 400);
+  assert.equal(dealCost(3, 400, { mechanism: '1+1 gratis' }), 800);
+  assert.equal(dealCost(2, 400, { mechanism: '2e halve prijs' }), 600);
+  assert.equal(dealCost(1, 400, { mechanism: '25% KORTING' }), 300);
+  assert.equal(dealCost(2, 400, { mechanism: '1 EURO KORTING' }), 600);
+  assert.equal(dealCost(1, 199, { mechanism: 'VOOR 0.99', price: 99, was: 199 }), 99);
+  assert.equal(dealCost(3, 250, { mechanism: '2 VOOR 4.00' }), 650);
+  assert.equal(dealCost(1, 400, null), 400);
+  assert.equal(dealCost(1, 400, { mechanism: 'VOOR 5.00' }), 400);       // nooit duurder dan normaal
+  const prices = { kip: { price: 500, size: { amount: 300, unit: 'g' }, deal: { mechanism: '25% KORTING' } }, ui: { price: 89, size: null } };
+  const c = dishCost([{ name: 'kip', qty: 1, amount: '300 gr' }, { name: 'ui', qty: 1, amount: '' }], (n) => prices[n]);
+  assert.deepEqual([c.total, c.dealTotal, c.saving], [589, 464, 125]);
+});
+
+test('voorraadkast, breuken en tomaat/tomaten', () => {
+  assert.equal(parseIngredient('zout/peper').pantry, true);
+  assert.equal(parseIngredient('snuf peper & zout').pantry, true);
+  assert.equal(parseIngredient('1 rode paprika').pantry, false);
+  const k = parseIngredient('1/2 komkommer');
+  assert.deepEqual([k.amount, k.name], [0.5, 'komkommer']);
+  const items = [{ name: 'AH Snoepgroente tomaat', price: 219, id: 1 }, { name: 'AH Tomaten', price: 155, id: 2 }, { name: 'AH Roerbak visreepjes zeezout en peper', price: 337, id: 3 }];
+  assert.equal(rankForIngredient(items, 'tomaat')[0].id, 2);
+  assert.equal(rankForIngredient(items, 'peren').length, 0);
+});

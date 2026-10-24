@@ -6,6 +6,12 @@ const UNIT_RE = new RegExp(`^(${UNITS.join('|')})\\.?\\s+`, 'i');
 // Wat bijna iedereen in huis heeft: standaard niet aangevinkt bij "op de lijst".
 const PANTRY = /^(peper|zout|peper en zout|zout en peper|olie|olijfolie|zonnebloemolie|(roomboter|boter)( om in te bakken)?|bloem|suiker|water|kokend water|azijn|ketjap|sojasaus|paprikapoeder|kerriepoeder|komijn|knoflookpoeder|oregano|italiaanse kruiden|chilivlokken|nootmuskaat|kaneel|bakpoeder|mosterd|mayonaise|ketchup|honing|bouillonblokje|bouillon|groentebouillon|kippenbouillon|cayennepeper|gedroogde [a-z ]+|olie of boter)$/i;
 
+/** "zout/peper", "peper & zout", "olie (om in te bakken)" → meestal in huis. */
+function isPantry(name) {
+  const n = String(name).toLowerCase().replace(/\s*\(.*\)$/, '').replace(/\s*[/&+]\s*|\s*,\s*/g, ' en ').replace(/\s+/g, ' ').trim();
+  return PANTRY.test(n) || n.split(' en ').every((part) => PANTRY.test(part.trim()));
+}
+
 const num = (s) => {
   if (s == null) return null;
   const t = String(s).replace(',', '.').trim();
@@ -30,7 +36,7 @@ export function parseIngredient(raw) {
   const optional = OPT.test(s);
   s = s.replace(OPT, ' ').replace(/\s+/g, ' ').trim();
   let amount = null, amountTo = null, unit = '';
-  const m = s.match(/^(\d+(?:[.,]\d+)?(?:\s*½)?|\d+\/\d+|½|¼)(?:\s*(?:-|tot|à)\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
+  const m = s.match(/^(\d+\/\d+|\d+(?:[.,]\d+)?(?:\s*½)?|½|¼)(?:\s*(?:-|tot|à)\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
   if (m && m[3] !== undefined) {
     amount = num(m[1]); amountTo = m[2] ? num(m[2]) : null; s = m[3];
     const g = s.match(/^(gram|gr|g|kg|ml|cl|dl|l)(\s+|$)/i) || s.match(UNIT_RE);
@@ -40,7 +46,7 @@ export function parseIngredient(raw) {
     if (g && /^(snuf|snufje|klontje|klont|scheutje|scheut|handje|handjevol|handvol|mespuntje|beetje)/i.test(g[1])) { unit = g[1]; s = s.slice(g[0].length); }
   }
   const name = s.replace(/^(een\s+)?(beetje|scheutje|klontje|snufje|handje)\s+/i, '').replace(/[,;]\s*$/, '').trim();
-  return { raw: String(raw).trim(), amount, amountTo, unit, name, optional, pantry: PANTRY.test(name.replace(/\s*\(.*\)$/, '')) };
+  return { raw: String(raw).trim(), amount, amountTo, unit, name, optional, pantry: isPantry(name) };
 }
 
 /** Hoeveelheid als tekst, eventueel geschaald ("700 gr", "4-6", "klontje"). */

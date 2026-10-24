@@ -3,7 +3,7 @@ import { state, derived, loadAssortment, setSetting } from './store.js';
 import { findProducts } from '../core/query.js';
 import { productTokens, parseSize } from '../core/products.js';
 import { priceStats } from '../core/stockpile.js';
-import { indexAssortment } from '../core/assortment.js';
+import { indexAssortment, productsForOffer } from '../core/assortment.js';
 import { choiceKey, queryVariants, rankForIngredient, cheapestCover } from '../core/ah.js';
 
 /** Het eigen product (uit de bonnen) dat het vaakst gekocht is en bij deze naam past. */
@@ -51,16 +51,39 @@ export function ahSuggest(idx, name, productId = null) {
   return top ? { id: top.id, name: top.name, price: top.price, sizeText: top.sizeText } : null;
 }
 
-/** Prijs van één verpakking voor de kosten van een gerecht: eigen keuze, eigen laatste prijs, anders AH. */
+// ---------- AH-aanbiedingen van deze week, per AH-productnummer ----------
+const dealCache = { key: null, map: new Map() };
+/** productnummer → aanbieding (losse producten via de link, groepsacties via de producten die eronder vallen). */
+export function ahDeals() {
+  const offers = state.offers?.data?.offers || [];
+  const today = derived().today;
+  const key = `${state.offers?.data?.generatedAt}|${today}|${Boolean(assortment)}`;
+  if (dealCache.key === key) return dealCache.map;
+  const map = new Map();
+  if (assortment) {
+    for (const o of offers) {
+      if (o.store !== 'ah' || !o.mechanism) continue;
+      if ((o.validFrom && o.validFrom > today) || (o.validTo && o.validTo < today)) continue;
+      const wi = String(o.url || '').match(/\/wi(\d+)/);
+      const ids = wi ? [+wi[1]] : productsForOffer(assortment, o, { limit: 300 }).map((x) => x.id).filter(Boolean);
+      for (const id of ids) if (!map.has(id)) map.set(id, o);
+    }
+  }
+  dealCache.key = key; dealCache.map = map;
+  return map;
+}
+export const dealFor = (id) => (id ? ahDeals().get(+id) || null : null);
+
+/** Prijs van één verpakking voor de kosten van een gerecht: eigen keuze, eigen laatste prijs, anders AH. Met AH-aanbieding als die er is. */
 export function priceFor(name, ing = null) {
   const c = ahChoice(name);
-  if (c?.price) return { price: c.price, size: parseSize(c.sizeText) || parseSize(c.name), name: c.name, source: 'ah' };
+  if (c?.price) return { price: c.price, size: parseSize(c.sizeText) || parseSize(c.name), name: c.name, source: 'ah', id: c.id, deal: dealFor(c.id) };
   const p = matchIngredient(name);
   if (p) {
     const st = priceStats(derived().facts, p.id);
     if (st.observations && st.packPrice && !st.weighed) return { price: Math.round(st.packPrice), size: st.packSize, name: p.name, source: 'eigen' };
   }
   if (!assortment) return null;
-  const top = cheapestCover(ahSearch(assortment, name, { withScore: true }), ing);
-  return top ? { price: top.price, size: top.sizeAmount ? { amount: top.sizeAmount, unit: top.sizeUnit } : null, name: top.name, source: 'ah' } : null;
+  const top = cheapestCover(ahSearch(assortment, name, { withScore: true }), ing, dealFor);
+  return top ? { price: top.price, size: top.sizeAmount ? { amount: top.sizeAmount, unit: top.sizeUnit } : null, name: top.name, source: 'ah', id: top.id, deal: dealFor(top.id) } : null;
 }
