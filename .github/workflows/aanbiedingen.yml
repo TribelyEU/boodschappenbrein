@@ -55,6 +55,7 @@ jobs:
         continue-on-error: true
         env:
           RECIPE_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.recepten || 30 }}
+          RECIPE_REFRESH: ${{ github.event_name == 'workflow_dispatch' && inputs.recepten || 20 }}
         run: node scripts/fetch-recipes.mjs
 
       - name: Winkelpagina's bewaren voor diagnose

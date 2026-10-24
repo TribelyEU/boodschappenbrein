@@ -1,7 +1,7 @@
 // Recepten: ingrediënten ontleden, schalen en het JSON-LD van Lekker en Simpel.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseIngredient, amountText, recipeFromLd, searchRecipes } from '../js/core/recipes.js';
+import { parseIngredient, amountText, recipeFromLd, searchRecipes, ratingFromHtml, ratingScore } from '../js/core/recipes.js';
 
 test('ingrediënten ontleden', () => {
   const a = parseIngredient('700 gr kruimige aardappels');
@@ -132,4 +132,16 @@ test('aantal AH-verpakkingen voor een lijstregel', () => {
   assert.equal(packsForListItem({ qty: 2, note: '' }, null), 2);
   assert.equal(packsForListItem({ qty: 1, note: 'Lidl: voor 0,99' }, { amount: 500, unit: 'g' }), 1);
   assert.equal(packsForListItem({ qty: 1, note: '2 tenen' }, { amount: 2, unit: 'st' }), 1);
+});
+
+test('beoordelingen', () => {
+  const r = recipeFromLd({ ...LD['@graph'][1], aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.67', ratingCount: '12' } }, 'u');
+  assert.deepEqual([r.rating, r.ratingCount], [4.7, 12]);
+  assert.equal(recipeFromLd(LD, 'u').rating, undefined);
+  assert.deepEqual(ratingFromHtml('<span class="wprm-recipe-rating-average">4.5</span> <span class="wprm-recipe-rating-count">8</span>'), { rating: 4.5, ratingCount: 8 });
+  assert.deepEqual(ratingFromHtml('<p>niets</p>'), {});
+  // 200 stemmen van 4,8 boven 2 stemmen van 5
+  assert.ok(ratingScore({ rating: 4.8, ratingCount: 200 }) > ratingScore({ rating: 5, ratingCount: 2 }));
+  const a = { ...r, name: 'A', rating: 5, ratingCount: 2 }, b = { ...r, name: 'B', rating: 4.8, ratingCount: 200 }, c = { ...recipeFromLd(LD, 'u'), name: 'C' };
+  assert.deepEqual(searchRecipes([c, a, b], '', { sort: 'rating' }).map((x) => x.name), ['B', 'A', 'C']);
 });

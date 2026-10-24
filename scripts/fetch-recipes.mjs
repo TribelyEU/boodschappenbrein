@@ -5,7 +5,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { recipeFromLd } from '../js/core/recipes.js';
+import { recipeFromLd, ratingFromHtml } from '../js/core/recipes.js';
 import { robotsAllows } from './store-sources.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,11 +13,21 @@ const FILE = join(root, 'data', 'recepten.json');
 const B = 'https://www.lekkerensimpel.com';
 const UA = 'Mozilla/5.0 (compatible; Boodschappenbrein/1.0; huishoudapp, haalt alleen receptgegevens op)';
 const LIMIT = Number(process.env.RECIPE_LIMIT || 30);
+// Beoordelingen veranderen: elke keer ook een aantal bekende recepten opnieuw bekijken (oudst bekeken eerst)
+const REFRESH = Number(process.env.RECIPE_REFRESH || 20);
 const MAX_KEEP = 2000;
 // Geen recepten maar overzichten, weekmenu's en nieuws
 const NOT_RECIPE = /\/(lekker-en-simpel-weekmenu|weekmenu|best-bekeken|\d+x-|food-photos|en-de-winnaar|ingezonden|winactie|nieuwe-recepten|kookboek|recepten-van-de-week)/i;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function parsePage(page, url) {
+  for (const m of page.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+    let rec = null;
+    try { rec = recipeFromLd(JSON.parse(m[1]), url); } catch { /* ongeldige JSON */ }
+    if (rec) return rec.rating ? rec : { ...rec, ...ratingFromHtml(page) };
+  }
+  return null;
+}
 async function get(url) {
   const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xml' }, redirect: 'follow' });
   if (!r.ok) throw new Error(`HTTP ${r.status} voor ${url}`);
@@ -43,14 +53,22 @@ const todo = urls.filter((u) => !known.has(u.loc) && !NOT_RECIPE.test(new URL(u.
 let added = 0, skipped = 0, failed = 0;
 for (const u of todo) {
   try {
-    const page = await get(u.loc);
-    let rec = null;
-    for (const m of page.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
-      try { rec = recipeFromLd(JSON.parse(m[1]), u.loc); } catch { /* ongeldige JSON */ }
-      if (rec) break;
-    }
-    if (rec) { db.recipes.push(rec); added++; } else { db.skipped.push(u.loc); skipped++; }
+    const rec = parsePage(await get(u.loc), u.loc);
+    if (rec) { db.recipes.push({ ...rec, checked: new Date().toISOString() }); added++; } else { db.skipped.push(u.loc); skipped++; }
   } catch (e) { failed++; console.warn(e.message); }
+  await sleep(2000);
+}
+
+// Bekende recepten bijwerken (beoordeling, ingrediënten)
+let refreshed = 0;
+const stale = [...db.recipes].sort((a, b) => String(a.checked || '').localeCompare(String(b.checked || ''))).slice(0, REFRESH);
+for (const old of stale) {
+  try {
+    const rec = parsePage(await get(old.url), old.url);
+    Object.assign(old, rec || {}, { checked: new Date().toISOString() });
+    if (!rec?.rating) { delete old.rating; delete old.ratingCount; }
+    refreshed++;
+  } catch (e) { old.checked = new Date().toISOString(); console.warn(e.message); }
   await sleep(2000);
 }
 
@@ -59,4 +77,5 @@ db.recipes = db.recipes.slice(0, MAX_KEEP);
 db.skipped = db.skipped.slice(-6000);
 db.generatedAt = new Date().toISOString();
 await writeFile(FILE, JSON.stringify(db));
+console.log(`Met beoordeling: ${db.recipes.filter((r) => r.rating).length}; ${refreshed} bijgewerkt.`);
 console.log(`Recepten: ${added} nieuw, ${skipped} geen recept, ${failed} mislukt; totaal ${db.recipes.length} (nog ${Math.max(0, urls.filter((u) => !known.has(u.loc)).length - todo.length)} te doen).`);

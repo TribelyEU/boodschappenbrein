@@ -77,13 +77,34 @@ export function recipeFromLd(ld, url) {
     cuisine: [].concat(r.recipeCuisine || []).map(decode),
     keywords: decode(r.keywords).split(',').map((k) => k.trim().toLowerCase()).filter(Boolean),
     date: (r.datePublished || '').slice(0, 10),
+    ...ratingOf(r.aggregateRating),
   };
+}
+
+/** Beoordeling uit aggregateRating: { rating: 4.7, ratingCount: 23 } (leeg als er geen stemmen zijn). */
+export function ratingOf(a) {
+  const value = Number(String(a?.ratingValue ?? '').replace(',', '.'));
+  const count = Number(a?.ratingCount ?? a?.reviewCount ?? 0);
+  return value > 0 && count > 0 ? { rating: Math.round(value * 10) / 10, ratingCount: count } : {};
+}
+
+/** Terugval: de sterren van WP Recipe Maker in de pagina zelf. */
+export function ratingFromHtml(html) {
+  const avg = String(html).match(/wprm-recipe-rating-average[^>]*>\s*([\d.,]+)/);
+  const cnt = String(html).match(/wprm-recipe-rating-count[^>]*>\s*(\d+)/);
+  return avg && cnt ? ratingOf({ ratingValue: avg[1], ratingCount: cnt[1] }) : {};
+}
+
+/** Score om op te sorteren: gemiddelde, getrokken naar 4 bij weinig stemmen (3 stemmen van 5 ≠ 200 stemmen van 4,8). */
+export function ratingScore(r, { prior = 4, weight = 5 } = {}) {
+  if (!r.rating || !r.ratingCount) return 0;
+  return (r.rating * r.ratingCount + prior * weight) / (r.ratingCount + weight);
 }
 
 const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /** Zoeken op woorden in naam, ingrediënten en trefwoorden. Alle woorden moeten voorkomen. */
-export function searchRecipes(list, query, { maxTime = null, category = null, limit = 60 } = {}) {
+export function searchRecipes(list, query, { maxTime = null, category = null, limit = 60, sort = 'relevant' } = {}) {
   const words = norm(query).split(/\s+/).filter((w) => w.length >= 2);
   const out = [];
   for (const r of list) {
@@ -95,6 +116,7 @@ export function searchRecipes(list, query, { maxTime = null, category = null, li
     const score = words.reduce((s, w) => s + (name.includes(w) ? 3 : 1), 0);
     out.push({ r, score });
   }
-  out.sort((a, b) => b.score - a.score || String(b.r.date).localeCompare(String(a.r.date)));
+  if (sort === 'rating') out.sort((a, b) => ratingScore(b.r) - ratingScore(a.r) || b.score - a.score);
+  else out.sort((a, b) => b.score - a.score || String(b.r.date).localeCompare(String(a.r.date)));
   return out.slice(0, limit).map((x) => x.r);
 }
