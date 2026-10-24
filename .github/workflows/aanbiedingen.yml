@@ -36,6 +36,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # altijd de nieuwste gegevens, ook als deze run in de wachtrij stond
 
       - uses: actions/setup-node@v4
         with:
