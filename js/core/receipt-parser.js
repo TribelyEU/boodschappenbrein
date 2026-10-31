@@ -41,7 +41,8 @@ const SKIP = [
   /\bleesmethode\b/i, /\bkaart\b.*\d{4}/i, /\bterm\b/i, /\btrans\b/i, /\bok\b\s*$/i, /koopzegels?\s+gespaard/i,
   /aantal artikelen/i, /bonus\s*nr/i, /airmiles\s*nr/i, /^\s*spaaracties/i, /espaarzegels/i, /^\s*\d+\s*artikel(en)?\s*$/i, /openingstijden/i, /klantenservice/i, /kvk/i, /iban/i,
 ];
-const TOTAL_RE = /^\s*(totaal|te betalen|totaalbedrag|total|eindtotaal)\b(?!\s*voordeel)/i;
+// "tota[a-z]{1,3}" vangt OCR-fouten op als "Totaary"; "korting" en "voordeel" zijn geen eindtotaal.
+const TOTAL_RE = /^\s*(totaal|tota[a-z]{1,3}|te betalen|totaalbedrag|total|eindtotaal)\b(?!\s*(voordeel|korting))/i;
 // AH zet het aantal artikelen vóór SUBTOTAAL: "31 SUBTOTAAL 65,70".
 const SUBTOTAL_RE = /^\s*(?:\d{1,4}\s+)?sub\s*-?\s*totaal\b/i;
 const DISCOUNT_RE = /\b(bonus|korting|kassakorting|actie|voordeel|promo|kortingsbon|zegel\s*korting|2e\s*halve|1\s*\+\s*1|gratis|prijsvoordeel|aanbieding|lidl plus|personal|mijn ah miles|miles)\b/i;
@@ -86,7 +87,8 @@ export function parseReceiptText(text, opts = {}) {
 
   for (let idx = 0; idx < lines.length; idx++) {
     const original = lines[idx];
-    const line = original.trim().replace(/\s+/g, ' ');
+    // OCR-herstel: "5° 49" → "5,49" en "11/98" → "11,98" (de scheidingsteken worden vaak verkeerd gelezen).
+    const line = original.trim().replace(/\s+/g, ' ').replace(/(\d)\s*[°'`]\s*(\d{2})\b/g, '$1,$2').replace(/(\d)\/(\d{2})\b/g, '$1,$2');
 
     if (TOTAL_RE.test(line) && !SUBTOTAL_RE.test(line)) {
       const amounts = line.match(/-?\d{1,5}[,.]\d{2}-?/g);

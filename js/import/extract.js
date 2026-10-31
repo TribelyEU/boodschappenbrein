@@ -89,10 +89,20 @@ async function prepareImage(file) {
   return canvas;
 }
 
+/** Aantal bedragen in de tekst (een kassabon heeft er veel; bij te weinig is de opmaak niet goed gelezen). */
+const amountCount = (t) => (String(t).match(/\d{1,4}[,.]\d{2}/g) || []).length;
+
 async function ocrCanvas(canvas, onProgress) {
   const worker = await getOcrWorker(onProgress);
-  const { data } = await worker.recognize(canvas);
-  return data.text;
+  // Eerst "één blok" (psm 4): goed voor de meeste bonnen. Bij een bon met kolommen (Jumbo) vallen de bedragen dan weg;
+  // dan opnieuw met "losse regels" (psm 6), en het resultaat met de meeste bedragen gebruiken.
+  await worker.setParameters({ tessedit_pageseg_mode: '4' });
+  const first = (await worker.recognize(canvas)).data.text;
+  if (amountCount(first) >= 6) return first;
+  await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const second = (await worker.recognize(canvas)).data.text;
+  await worker.setParameters({ tessedit_pageseg_mode: '4' });
+  return amountCount(second) > amountCount(first) ? second : first;
 }
 
 export async function extractImage(file, onProgress) {

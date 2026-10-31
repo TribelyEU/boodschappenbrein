@@ -913,3 +913,16 @@ KLANTTICKET`;
   assert.equal(r.lines[3].amount, 656);
   assert.ok(!r.warnings.some((w) => /wijkt af/.test(w)));
 });
+
+test('OCR-fouten: scheidingsteken, "Totaary" en "korting" onder het totaal', () => {
+  const text = `Jumbo supermarkten
+VP PASTA POMODORO 5° 49
+ACTIE NESPRESSO CUPS -11/98
+Totaary 6,58
+Maestro
+Totaal korting -1,10`;
+  const r = parseReceiptText(text, {});
+  assert.equal(r.lines.find((l) => /PASTA/.test(l.rawName)).amount, 549);
+  assert.equal(r.lines.find((l) => /NESPRESSO/.test(l.rawName)).amount, -1198);
+  assert.equal(r.total, 658);
+});
