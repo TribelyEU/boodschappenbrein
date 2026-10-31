@@ -21,7 +21,7 @@ import { isAhInvoice, parseAhInvoice } from './ah-invoice.js';
 import { isLidlReceipt, parseLidlReceipt } from './lidl-receipt.js';
 
 const AMT = '(-?\\s?\\d{1,4}[,.]\\d{2}-?)';
-const VAT = '(?:\\s+[A-D]|\\s+\\d{1,2}%)?'; // btw-code achter het bedrag
+const VAT = '(?:\\s*€?\\s+[A-D]|\\s+\\d{1,2}%)?'; // btw-code achter het bedrag
 const TAIL = `\\s*(?:€|eur)?\\s*`;
 
 const RE_QTY_NAME_UNIT_TOTAL = new RegExp(`^(\\d{1,3})\\s+(.+?)\\s+${AMT}\\s+${AMT}${VAT}$`, 'i');
@@ -81,6 +81,7 @@ export function parseReceiptText(text, opts = {}) {
   };
 
   let pendingName = null;
+  let pendingQty = null; // "1,068 kg x 0,85 €/kg" of "2 x 3,28 €" boven de naam
   let inPaymentSection = false;
 
   for (let idx = 0; idx < lines.length; idx++) {
@@ -102,6 +103,31 @@ export function parseReceiptText(text, opts = {}) {
     }
     if (inPaymentSection) continue; // alles na TOTAAL is betaalinformatie (en samenvattingen zoals "uw voordeel")
     if (SKIP.some((re) => re.test(line))) { pendingName = null; continue; }
+
+    // Aldi-opmaak: eerst het aantal, daarna de naam met het bedrag op een eigen regel.
+    const pw = line.match(/^(\d{1,3}[,.]\d{1,3})\s*kg\s*[xX×]\s*(?:€\s*)?(\d{1,3}[,.]\d{2})\s*(?:€\s*)?\/?\s*kg$/i);
+    // Het aantal staat boven de naam als de regel eronder een bedrag heeft dat erbij past (Aldi).
+    // Anders hoort het aantal bij het artikel erboven (Lidl: "2 X 0,99" onder "Halfvolle melk").
+    const nextAmt = (lines[idx + 1] || '').match(/^.*[a-zA-Z]{2,}.*?\s+(-?\d{1,4}[,.]\d{2})-?\s*€?(?:\s+[A-D])?$/i);
+    const nextVal = nextAmt ? parseAmount(nextAmt[1]) : null;
+    if (pw && nextVal != null && Math.abs(nextVal - Math.round(parseFloat(pw[1].replace(',', '.')) * parseAmount(pw[2]))) <= 2) {
+      pendingQty = { qty: parseFloat(pw[1].replace(',', '.')), unit: parseAmount(pw[2]), weighed: true, raw: original }; pendingName = null; continue;
+    }
+    const pq = line.match(/^(\d{1,3})\s*[xX×]\s*(\d{1,4}[,.]\d{2})\s*€?$/);
+    if (pq && nextVal != null && Math.abs(nextVal - parseInt(pq[1], 10) * parseAmount(pq[2])) <= 1) {
+      pendingQty = { qty: parseInt(pq[1], 10), unit: parseAmount(pq[2]), weighed: false, raw: original }; pendingName = null; continue;
+    }
+    if (pendingQty) {
+      const na = line.match(new RegExp(`^(.*[a-zA-Z]{2,}.*?)\\s+${AMT}${VAT}$`, 'i'));
+      if (na) {
+        const amount = parseAmount(na[2]);
+        const name = cleanName(na[1]);
+        if (pendingQty.weighed) pushProduct(result, name, pendingQty.qty, pendingQty.unit, amount, `${pendingQty.raw}\n${original}`, 0.8, true);
+        else classifyAndPush(result, name, pendingQty.qty, pendingQty.unit, amount, `${pendingQty.raw}\n${original}`, 0.85);
+        pendingQty = null;
+        continue;
+      }
+    }
 
     // Aparte aantallen-regel: "2 x 0,99" (hoort bij het vorige of volgende artikel)
     let m = line.match(RE_QTYX_ONLY);

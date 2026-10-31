@@ -890,3 +890,26 @@ test('inslag: aanbieding in een andere eenheid wordt niet vergeleken', () => {
   assert.equal(b.unitLabel, 'stuk');
   assert.equal(b.effBase, 14); // 4,99 / 36
 });
+
+test('Aldi-bon: gewicht en aantal staan boven de naam, btw-code achter €', () => {
+  const text = `ALDI
+Schepenenveld 6, 2712 BW Zoetermeer
+1,068 kg x 0,85 €/kg
+BANANEN LOS PER KG 0,91 € B
+1,084 kg x 0,85 €/kg
+BANANEN LOS PER KG 0,92 € B
+1,068 kg x 0,85 €/kg
+BANANEN LOS PER KG 0,91 € B
+2 x 3,28 €
+TOILETPAPIER 3-LAAGS 6,56 € C
+SUBTOTAAL EUR 9,30
+TE BETALEN 9,30 €
+KLANTTICKET`;
+  const r = parseReceiptText(text, {});
+  assert.equal(r.store, 'aldi');
+  assert.equal(r.total, 930);
+  assert.deepEqual(r.lines.map((l) => l.rawName), ['BANANEN LOS PER KG', 'BANANEN LOS PER KG', 'BANANEN LOS PER KG', 'TOILETPAPIER 3-LAAGS']);
+  assert.equal(r.lines[3].qty, 2);
+  assert.equal(r.lines[3].amount, 656);
+  assert.ok(!r.warnings.some((w) => /wijkt af/.test(w)));
+});
